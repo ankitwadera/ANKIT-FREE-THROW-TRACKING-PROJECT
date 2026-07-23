@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+
+outputs/
+first_skeleton.png
+first_skeleton_fixed.png
+
+SPL-Open-Data-main/
