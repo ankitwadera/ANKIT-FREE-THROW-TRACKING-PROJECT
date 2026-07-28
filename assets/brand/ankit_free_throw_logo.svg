@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#101a2d"/>
+      <stop offset="100%" stop-color="#24385e"/>
+    </linearGradient>
+    <linearGradient id="ball" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff8d58"/>
+      <stop offset="100%" stop-color="#f26a2e"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="360" rx="36" fill="url(#bg)"/>
+
+  <g transform="translate(55 55)">
+    <circle cx="125" cy="125" r="104" fill="url(#ball)"/>
+    <path d="M25 125h200M125 25v200" stroke="#152033" stroke-width="13" fill="none"/>
+    <path d="M46 59c44 30 114 30 158 0M46 191c44-30 114-30 158 0" stroke="#152033" stroke-width="13" fill="none"/>
+    <path d="M59 46c30 44 30 114 0 158M191 46c-30 44-30 114 0 158" stroke="#152033" stroke-width="13" fill="none"/>
+    <path d="M78 117c25-52 73-74 128-70" stroke="#fff3ec" stroke-width="9" stroke-linecap="round" fill="none"/>
+    <circle cx="211" cy="43" r="8" fill="#fff3ec"/>
+  </g>
+
+  <text x="325" y="128" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="800" fill="#ff9b6d" letter-spacing="3">
+    ANKIT'S
+  </text>
+  <text x="325" y="196" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="900" fill="#ffffff">
+    FREE THROW ANALYSIS
+  </text>
+  <text x="325" y="255" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800" fill="#dce4f0">
+    SOFTWARE
+  </text>
+  <text x="325" y="305" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="500" fill="#aebbd0">
+    Structured tracking. Coach-ready intelligence. Player development.
+  </text>
+</svg>
