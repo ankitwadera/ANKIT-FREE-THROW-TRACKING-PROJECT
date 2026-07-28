@@ -266,7 +266,11 @@ def initialize_public_workspace(
 
 def reset_public_workspace() -> None:
     """
-    Delete the visitor's temporary workspace and return to the two-mode chooser.
+    Delete the temporary visitor workspace and return to the two-mode chooser.
+
+    This function is used as a Streamlit button callback. Callbacks execute
+    before the next top-to-bottom script run, which makes it safe to clear the
+    Navigation widget state.
     """
 
     import streamlit as st
@@ -281,44 +285,20 @@ def reset_public_workspace() -> None:
             ignore_errors=True,
         )
 
-    # Clear cached data and repository objects before the old temporary
-    # database path disappears from the active application state.
     st.cache_data.clear()
     st.cache_resource.clear()
 
-    preserved_keys = {
-        "public_workspace_data_root",
-        "public_workspace_kind",
-        "private_workspace",
-        "pending_workspace_navigation",
-    }
-
+    # Clear every temporary widget and workflow value, including the
+    # private_workspace Navigation widget key. Do not assign a new value here;
+    # initialize_session_state() will recreate the default only after the user
+    # chooses one of the two modes.
     for key in list(
         st.session_state.keys()
     ):
-        if key not in preserved_keys:
-            st.session_state.pop(
-                key,
-                None,
-            )
-
-    st.session_state.pop(
-        "public_workspace_data_root",
-        None,
-    )
-
-    st.session_state.pop(
-        "public_workspace_kind",
-        None,
-    )
-
-    st.session_state[
-        "private_workspace"
-    ] = "Home"
-
-    st.session_state[
-        "pending_workspace_navigation"
-    ] = None
+        st.session_state.pop(
+            key,
+            None,
+        )
 
 
 def render_public_workspace_chooser() -> None:
@@ -389,7 +369,7 @@ def render_public_workspace_chooser() -> None:
         )
 
         if st.button(
-            "Start Blank Workspace Mode",
+            "Start Blank Workspace Mode Mode",
             type="primary",
             use_container_width=True,
             key="start_blank_public_workspace",
@@ -20399,13 +20379,12 @@ def main() -> None:
                     unsafe_allow_html=True,
                 )
 
-                if st.button(
+                st.button(
                     "Choose Different Mode",
                     use_container_width=True,
                     key="sidebar_reset_public_workspace",
-                ):
-                    reset_public_workspace()
-                    st.rerun()
+                    on_click=reset_public_workspace,
+                )
 
             quick_left, quick_right = st.columns(2)
 
