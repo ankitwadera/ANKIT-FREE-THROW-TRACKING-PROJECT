@@ -3941,12 +3941,12 @@ def render_smooth_video_player(
 
     render_clicked = st.button(
         (
-            "Generate Smooth Video"
+            "Generate Optional MP4"
             if (
                 f"{widget_prefix}_video_bytes"
                 not in st.session_state
             )
-            else "Regenerate Smooth Video"
+            else "Regenerate Optional MP4"
         ),
         key=(
             f"{widget_prefix}_render_video"
@@ -4007,7 +4007,7 @@ def render_smooth_video_player(
         in st.session_state
     ):
         st.info(
-            "Playback settings changed. Select **Regenerate Smooth Video** "
+            "Playback settings changed. Select **Regenerate Optional MP4** "
             "to create the updated version."
         )
 
@@ -4022,6 +4022,19 @@ def render_smooth_video_player(
             start_time=0,
         )
 
+        st.download_button(
+            label="Download Complete Shot MP4",
+            data=video_bytes,
+            file_name=(
+                f"{trial_data.get('participant_id', 'participant')}_"
+                f"{trial_data.get('trial_id', 'trial')}_"
+                "complete_shot.mp4"
+            ),
+            mime="video/mp4",
+            use_container_width=True,
+            key=f"{widget_prefix}_download_video",
+        )
+
         st.caption(
             (
                 f"{playback_speed} · {view_name} view · "
@@ -4033,7 +4046,7 @@ def render_smooth_video_player(
 
     else:
         st.info(
-            "Select **Generate Smooth Video** to create a browser-native MP4. "
+            "Select **Generate Optional MP4** to create a browser-native video. "
             "The first render may take time, but playback will then be smooth "
             "and the result will be cached."
         )
@@ -18255,25 +18268,18 @@ def display_results(
     )
 
     section_title(
-        "Smooth shot playback",
-        "Watch the complete attempt at real time, half speed, or quarter speed using browser-native video playback.",
-    )
-
-    render_smooth_video_player(
-        trial_data=trial_data,
-        title="Complete Shot Video",
-        widget_prefix="current_shot",
+        "Interactive shot review",
+        (
+            "Review the tracked attempt immediately without waiting for video "
+            "encoding. Scrub frame by frame or jump directly to detected shot "
+            "events."
+        ),
     )
 
     with st.expander(
-        "Open frame-by-frame biomechanics analysis",
-        expanded=False,
+        "Open frame-by-frame biomechanics playback",
+        expanded=True,
     ):
-        section_title(
-            "Interactive synchronized playback",
-            "Scrub through every tracking frame or jump directly to an authoritative shot event.",
-        )
-
         render_interactive_playback(
             result=result,
             trial_data=trial_data,
@@ -18287,28 +18293,15 @@ def display_results(
     ):
         section_title(
             "Side-by-side shot comparison",
-            "Compare the current shot with another tracked attempt using event-aligned synchronized playback.",
-        )
-
-        render_smooth_comparison_player(
-            result=result,
-            current_trial_data=trial_data,
-            comparison_trial_data=(
-                st.session_state
-                .comparison_trial_data
+            (
+                "Compare the current shot with another tracked attempt using "
+                "event-aligned frame-by-frame playback."
             ),
-            current_filename=uploaded_name,
-            comparison_filename=(
-                st.session_state
-                .comparison_filename
-                or "comparison.json"
-            ),
-            shooting_side=shooting_side,
         )
 
         with st.expander(
             "Open interactive frame-by-frame comparison",
-            expanded=False,
+            expanded=True,
         ):
             render_side_by_side_comparison(
                 result=result,
@@ -18535,6 +18528,57 @@ def display_results(
             ],
             expanded=False,
         )
+
+    section_title(
+        "Optional video exports",
+        (
+            "Analysis results are already complete. Generate an MP4 only when "
+            "you need a downloadable browser-native video. Encoding can take "
+            "several minutes on a free hosted server."
+        ),
+    )
+
+    with st.expander(
+        "Generate optional MP4 video exports",
+        expanded=False,
+    ):
+        st.warning(
+            (
+                "MP4 generation renders every tracking frame and then encodes "
+                "the result with FFmpeg. This is intentionally separate from "
+                "the main analysis so metrics, biomechanics, playback, and "
+                "reports appear without waiting."
+            )
+        )
+
+        render_smooth_video_player(
+            trial_data=trial_data,
+            title="Complete Shot MP4",
+            widget_prefix="current_shot",
+        )
+
+        if (
+            st.session_state.comparison_enabled
+            and st.session_state.comparison_trial_data
+            is not None
+        ):
+            st.markdown("---")
+
+            render_smooth_comparison_player(
+                result=result,
+                current_trial_data=trial_data,
+                comparison_trial_data=(
+                    st.session_state
+                    .comparison_trial_data
+                ),
+                current_filename=uploaded_name,
+                comparison_filename=(
+                    st.session_state
+                    .comparison_filename
+                    or "comparison.json"
+                ),
+                shooting_side=shooting_side,
+            )
 
     package = create_download_zip(
         uploaded_name=uploaded_name,
