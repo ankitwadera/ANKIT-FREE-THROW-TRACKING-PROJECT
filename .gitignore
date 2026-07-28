@@ -1,9 +1,71 @@
+# Python virtual environments
 .venv/
+venv/
+env/
+
+# Python cache and compiled files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Editors and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local databases and database journals
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Private backups
+backups/
+*.bak
+*.backup
+
+# Locally stored uploaded files
+data/player_history_files/
+
+# Generated outputs and reports
 outputs/
-first_skeleton.png
-first_skeleton_fixed.png
+generated_reports/
+temp/
+tmp/
+*.pdf
+*.png
 
+# Logs
+*.log
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Streamlit and test caches
+.streamlit/cache/
+.coverage
+htmlcov/
+
+# Local dataset source
 SPL-Open-Data-main/
+
+# Temporary media
+*.mp4
+*.avi
+*.mov
+*.gif
