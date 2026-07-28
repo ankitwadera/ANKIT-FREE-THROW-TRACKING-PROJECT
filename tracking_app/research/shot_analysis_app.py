@@ -4970,28 +4970,309 @@ def render_smooth_comparison_player(
         )
 
 
+class InMemoryJSONUpload:
+    """
+    Minimal Streamlit-upload-compatible wrapper for a packaged demo JSON file.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        payload: bytes,
+    ) -> None:
+        self.name = name
+        self._payload = payload
+
+    def getvalue(
+        self,
+    ) -> bytes:
+        return self._payload
+
+
+@st.cache_data(
+    show_spinner=False,
+)
+def demo_tracking_file_catalog(
+    workspace_root_text: str,
+) -> list[
+    dict[str, str]
+]:
+    """
+    Return compatible tracking JSON files available inside Demo Mode.
+    """
+
+    workspace_root = Path(
+        workspace_root_text
+    )
+
+    storage_root = (
+        workspace_root
+        / "player_history_files"
+    )
+
+    if not storage_root.exists():
+        return []
+
+    records = []
+
+    for json_path in sorted(
+        storage_root.rglob(
+            "*.json"
+        )
+    ):
+        try:
+            payload = json.loads(
+                json_path.read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            validated = validate_uploaded_json(
+                payload
+            )
+
+        except Exception:
+            continue
+
+        participant_id = str(
+            validated.get(
+                "participant_id",
+                json_path.parent.name,
+            )
+        )
+
+        trial_id = str(
+            validated.get(
+                "trial_id",
+                json_path.stem,
+            )
+        )
+
+        result = safe_result(
+            validated.get(
+                "result",
+                validated.get(
+                    "shot_result",
+                    "",
+                ),
+            )
+        )
+
+        records.append(
+            {
+                "path": str(
+                    json_path
+                ),
+                "filename": json_path.name,
+                "participant_id": participant_id,
+                "trial_id": trial_id,
+                "result": result,
+                "label": (
+                    f"{participant_id} · {trial_id}"
+                    + (
+                        f" · {result.title()}"
+                        if result
+                        else ""
+                    )
+                ),
+            }
+        )
+
+    return records
+
+
+def demo_upload_from_record(
+    record: dict[str, str],
+) -> InMemoryJSONUpload:
+    """
+    Load one packaged demo file as an upload-compatible object.
+    """
+
+    path = Path(
+        record[
+            "path"
+        ]
+    )
+
+    return InMemoryJSONUpload(
+        name=record[
+            "filename"
+        ],
+        payload=path.read_bytes(),
+    )
+
+
+def demo_mode_catalog() -> list[
+    dict[str, str]
+]:
+    """
+    Return the current Demo Mode shot catalog.
+    """
+
+    if active_workspace_kind() != "executive_demo":
+        return []
+
+    return demo_tracking_file_catalog(
+        str(
+            active_data_root()
+        )
+    )
+
+
 def render_comparison_studio_workspace(
     shooting_side: str,
 ) -> None:
     """
-    Upload or reuse two free throws and render one synchronized split-screen MP4.
+    Upload, reuse, or select two demo shots and create one split-screen MP4.
     """
 
     st.markdown(
         """
         <div class="bms-upload-shell">
-            <strong>Upload two free-throw tracking files</strong><br>
-            Shot 1 can reuse the file already analyzed in Single Shot Analysis.
-            Shot 2 is uploaded directly here. The final result is one
-            synchronized split-screen MP4 with both shots inside the same video.
+            <strong>Comparison Studio</strong><br>
+            Load two curated files in Demo Mode or upload two compatible
+            free-throw tracking JSON files. The result is one synchronized
+            split-screen MP4 with both shots inside the same video.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    demo_catalog = demo_mode_catalog()
+
+    if demo_catalog:
+        st.markdown(
+            "### Ready-to-use Demo Comparison"
+        )
+
+        st.caption(
+            (
+                "Choose two packaged free throws and click once to load both "
+                "files into Comparison Studio."
+            )
+        )
+
+        default_second_index = (
+            1
+            if len(
+                demo_catalog
+            )
+            > 1
+            else 0
+        )
+
+        demo_columns = st.columns(
+            2,
+            gap="large",
+        )
+
+        with demo_columns[0]:
+            first_demo_index = st.selectbox(
+                "Demo Shot 1",
+                options=list(
+                    range(
+                        len(
+                            demo_catalog
+                        )
+                    )
+                ),
+                index=0,
+                format_func=lambda index: demo_catalog[
+                    index
+                ][
+                    "label"
+                ],
+                key="demo_comparison_first_index",
+            )
+
+        with demo_columns[1]:
+            second_demo_index = st.selectbox(
+                "Demo Shot 2",
+                options=list(
+                    range(
+                        len(
+                            demo_catalog
+                        )
+                    )
+                ),
+                index=default_second_index,
+                format_func=lambda index: demo_catalog[
+                    index
+                ][
+                    "label"
+                ],
+                key="demo_comparison_second_index",
+            )
+
+        if st.button(
+            "Load Demo Comparison",
+            type="primary",
+            use_container_width=True,
+            key="load_demo_comparison_files",
+        ):
+            first_record = demo_catalog[
+                first_demo_index
+            ]
+
+            second_record = demo_catalog[
+                second_demo_index
+            ]
+
+            first_upload = demo_upload_from_record(
+                first_record
+            )
+
+            second_upload = demo_upload_from_record(
+                second_record
+            )
+
+            st.session_state[
+                "demo_comparison_shot_one_data"
+            ] = validate_uploaded_json(
+                json.loads(
+                    first_upload.getvalue()
+                )
+            )
+
+            st.session_state[
+                "demo_comparison_shot_one_filename"
+            ] = first_upload.name
+
+            st.session_state[
+                "demo_comparison_shot_two_data"
+            ] = validate_uploaded_json(
+                json.loads(
+                    second_upload.getvalue()
+                )
+            )
+
+            st.session_state[
+                "demo_comparison_shot_two_filename"
+            ] = second_upload.name
+
+            st.session_state.pop(
+                "comparison_primary_result",
+                None,
+            )
+
+            st.session_state.pop(
+                "comparison_primary_result_signature",
+                None,
+            )
+
+            st.success(
+                (
+                    "Demo comparison loaded. Both shots are ready for "
+                    "split-screen MP4 generation."
+                )
+            )
+
+        st.markdown("---")
+
     existing_data = st.session_state.get(
         "analysis_trial_data"
     )
+
     existing_filename = st.session_state.get(
         "analysis_filename"
     )
@@ -5008,12 +5289,12 @@ def render_comparison_studio_workspace(
             key="comparison_use_existing_shot_one",
         )
 
-    left, right = st.columns(
+    upload_columns = st.columns(
         2,
         gap="large",
     )
 
-    with left:
+    with upload_columns[0]:
         shot_one_upload = None
 
         if use_existing:
@@ -5022,16 +5303,20 @@ def render_comparison_studio_workspace(
             )
         else:
             shot_one_upload = st.file_uploader(
-                "Shot 1 — Free-Throw Tracking JSON",
-                type=["json"],
+                "Replace Shot 1 with your own JSON",
+                type=[
+                    "json",
+                ],
                 accept_multiple_files=False,
                 key="comparison_studio_shot_one_upload",
             )
 
-    with right:
+    with upload_columns[1]:
         shot_two_upload = st.file_uploader(
-            "Shot 2 — Free-Throw Tracking JSON",
-            type=["json"],
+            "Replace Shot 2 with your own JSON",
+            type=[
+                "json",
+            ],
             accept_multiple_files=False,
             key="comparison_studio_shot_two_upload",
         )
@@ -5043,6 +5328,7 @@ def render_comparison_studio_workspace(
                 existing_filename
                 or "single_shot.json"
             )
+
         elif shot_one_upload is not None:
             shot_one_data = validate_uploaded_json(
                 json.loads(
@@ -5050,9 +5336,14 @@ def render_comparison_studio_workspace(
                 )
             )
             shot_one_filename = shot_one_upload.name
+
         else:
-            shot_one_data = None
-            shot_one_filename = None
+            shot_one_data = st.session_state.get(
+                "demo_comparison_shot_one_data"
+            )
+            shot_one_filename = st.session_state.get(
+                "demo_comparison_shot_one_filename"
+            )
 
         if shot_two_upload is not None:
             shot_two_data = validate_uploaded_json(
@@ -5061,9 +5352,14 @@ def render_comparison_studio_workspace(
                 )
             )
             shot_two_filename = shot_two_upload.name
+
         else:
-            shot_two_data = None
-            shot_two_filename = None
+            shot_two_data = st.session_state.get(
+                "demo_comparison_shot_two_data"
+            )
+            shot_two_filename = st.session_state.get(
+                "demo_comparison_shot_two_filename"
+            )
 
     except Exception as error:
         st.error(
@@ -5079,9 +5375,19 @@ def render_comparison_studio_workspace(
         or shot_two_data is None
     ):
         st.info(
-            "Provide both Shot 1 and Shot 2 to build the comparison."
+            (
+                "Load the ready-to-use Demo Comparison above or provide "
+                "Shot 1 and Shot 2."
+            )
         )
         return
+
+    st.success(
+        (
+            f"Loaded comparison: {shot_one_filename} vs "
+            f"{shot_two_filename}"
+        )
+    )
 
     metrics = st.columns(
         4
@@ -5094,6 +5400,7 @@ def render_comparison_studio_workspace(
             "Unknown",
         ),
     )
+
     metrics[1].metric(
         "Shot 1 trial",
         shot_one_data.get(
@@ -5103,6 +5410,7 @@ def render_comparison_studio_workspace(
             ).stem,
         ),
     )
+
     metrics[2].metric(
         "Shot 2 participant",
         shot_two_data.get(
@@ -5110,6 +5418,7 @@ def render_comparison_studio_workspace(
             "Unknown",
         ),
     )
+
     metrics[3].metric(
         "Shot 2 trial",
         shot_two_data.get(
@@ -5143,6 +5452,7 @@ def render_comparison_studio_workspace(
                     original_filename=shot_one_filename,
                     shooting_side=shooting_side,
                 )
+
             except Exception as error:
                 st.error(
                     (
@@ -5155,6 +5465,7 @@ def render_comparison_studio_workspace(
         st.session_state[
             "comparison_primary_result"
         ] = primary_result
+
         st.session_state[
             "comparison_primary_result_signature"
         ] = prepared_signature
@@ -20751,22 +21062,117 @@ def main() -> None:
         "Upload one JSON trial, verify the detected participant, then run the analysis.",
     )
 
+    demo_single_upload = None
+
+    demo_catalog = demo_mode_catalog()
+
+    if demo_catalog:
+        st.markdown(
+            "### Ready-to-use Demo Shot"
+        )
+
+        st.caption(
+            (
+                "Select one packaged free throw and click Load Demo Shot. "
+                "It will behave like an uploaded JSON and will be ready for "
+                "analysis and smooth MP4 generation."
+            )
+        )
+
+        selected_demo_index = st.selectbox(
+            "Demo shot",
+            options=list(
+                range(
+                    len(
+                        demo_catalog
+                    )
+                )
+            ),
+            index=0,
+            format_func=lambda index: demo_catalog[
+                index
+            ][
+                "label"
+            ],
+            key="single_shot_demo_catalog_index",
+        )
+
+        if st.button(
+            "Load Demo Shot",
+            type="primary",
+            use_container_width=True,
+            key="load_single_demo_shot",
+        ):
+            selected_record = demo_catalog[
+                selected_demo_index
+            ]
+
+            demo_single_upload = demo_upload_from_record(
+                selected_record
+            )
+
+            st.session_state[
+                "loaded_demo_single_shot_path"
+            ] = selected_record[
+                "path"
+            ]
+
+            st.success(
+                (
+                    "Demo shot loaded. Click Run Complete Shot Analysis "
+                    "to analyze it."
+                )
+            )
+
+        elif st.session_state.get(
+            "loaded_demo_single_shot_path"
+        ):
+            selected_path = st.session_state[
+                "loaded_demo_single_shot_path"
+            ]
+
+            selected_record = next(
+                (
+                    record
+                    for record in demo_catalog
+                    if record[
+                        "path"
+                    ]
+                    == selected_path
+                ),
+                None,
+            )
+
+            if selected_record is not None:
+                demo_single_upload = demo_upload_from_record(
+                    selected_record
+                )
+
+        st.markdown("---")
+
     st.markdown(
         '<div class="bms-upload-shell">',
         unsafe_allow_html=True,
     )
 
-    uploaded_file = st.file_uploader(
+    user_uploaded_file = st.file_uploader(
         "Upload a free-throw tracking JSON",
         type=[
             "json",
         ],
         accept_multiple_files=False,
+        key="single_shot_user_upload",
     )
 
     st.markdown(
         "</div>",
         unsafe_allow_html=True,
+    )
+
+    uploaded_file = (
+        user_uploaded_file
+        if user_uploaded_file is not None
+        else demo_single_upload
     )
 
     clear_stale_result(
@@ -20775,7 +21181,12 @@ def main() -> None:
 
     if uploaded_file is None:
         st.info(
-            "Upload a JSON trial to begin."
+            (
+                "Load the ready-to-use Demo Shot above or upload a compatible "
+                "free-throw tracking JSON to begin."
+                if demo_catalog
+                else "Upload a compatible free-throw tracking JSON to begin."
+            )
         )
 
         return
