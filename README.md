@@ -1,143 +1,298 @@
-ANKIT'S FREE THROW TRACKING PROJECT
-Basketball Biomechanics & Player Development Platform
+# 🏀 ANKIT FREE THROW TRACKING PROJECT
 
-ANKIT'S FREE THROW TRACKING PROJECT is a Python-based basketball analytics platform that demonstrates how structured 3D optical tracking data (Hawk-Eye-style) can be transformed into practical coaching and player-development intelligence.
+## Basketball Biomechanics & Player Development Platform
 
-The software reconstructs basketball free throws from tracking data, automatically detects key shooting events, analyzes biomechanics and kinetic sequencing, evaluates consistency over time, and converts the results into coach-readable reports, player development insights, and front-office decision-support tools.
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![Streamlit](https://img.shields.io/badge/Streamlit-Web_App-red)
+![Docker](https://img.shields.io/badge/Docker-Ready-blue)
+![Render](https://img.shields.io/badge/Cloud-Deployable-green)
+![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
-The project was developed to demonstrate how modern tracking technology can extend beyond data collection and become a practical workflow for coaches, player-development staff, performance analysts, and basketball operations personnel.
+---
 
-Project Objectives
+> **A Python-based basketball analytics platform demonstrating how structured
+> Hawk-Eye-style optical tracking data can be transformed into player development,
+> biomechanics analysis, coaching workflows, and basketball operations intelligence.**
 
-This project explores how structured 3D basketball tracking data can be used to:
+---
 
-Reconstruct complete free-throw movements.
-Automatically detect key shot events.
-Evaluate shooting biomechanics.
-Measure movement consistency.
-Track player development over time.
-Compare successful and unsuccessful shooting patterns.
-Generate coach-ready feedback.
-Support basketball operations through organized reporting and analytics.
+# Project Overview
 
-Rather than attempting to define a single "perfect" shooting motion, the software focuses on identifying each player's individual movement profile and monitoring meaningful changes across training sessions.
+ANKIT FREE THROW TRACKING PROJECT demonstrates how modern optical player-tracking
+technology can extend beyond data collection and become a complete basketball
+player-development platform.
 
-Key Features
+Using structured three-dimensional free-throw tracking data, the software:
+
+- reconstructs player movement
+- identifies key shooting events
+- evaluates biomechanics
+- measures consistency
+- compares shooting sessions
+- tracks player development
+- generates professional coaching reports
+
+The goal is not to define a single "perfect" shooting motion. Instead, the platform
+builds an individual movement profile for each athlete and measures development over time.
+
+---
+
+# Key Features
+
+## Motion Analysis
+
+✅ 3D Skeleton Reconstruction
+
+✅ Ball Trajectory Visualization
+
+✅ Automatic Shot Event Detection
+
+✅ Release Analysis
+
+✅ Smooth MP4 Playback
+
+✅ Split-Screen Comparison Studio
+
+---
+
+## Biomechanics
+
+- Release Biomechanics
+- Phase Analysis
+- Kinetic Chain Analysis
+- Joint Sequencing
+- Timing Analysis
+- Consistency Metrics
+
+---
+
+## Player Development
+
+- Practice Session Management
+- Development Timelines
+- Historical Progress Tracking
+- Session Grading
+- Coaching Recommendations
+- Improvement Trends
+
+---
+
+## Basketball Operations
+
+- Organization Management
+- Team Management
+- Player Profiles
+- Roster Management
+- Team Dashboards
+- Executive Reporting
+
+---
+
+## Professional Reporting
+
+- Session Reports
+- Player Development Reports
+- Team Reports
+- Comparison Reports
+- Executive PDF Reports
+
+---
+
+# Public Portfolio Modes
+
+| Workspace | Purpose |
+|-----------|---------|
+| **Blank Workspace** | Create your own organization and upload compatible basketball free-throw tracking JSON files. |
+| **Executive Demo** | Explore a fully populated demonstration showing the complete coaching workflow. |
+
+---
+
+# Supported Tracking Data
+
+Compatible JSON files contain:
+
+- Ball coordinates
+- Player body keypoints
+- Participant ID
+- Trial ID
+- Shot result
+- Frame timing
+- Tracking sequence
+
+---
+
+# Unsupported Formats
+
+- Video
+- CSV
+- Excel
+- Shot Charts
+- Images
+- Generic JSON
+
+---
+
+# Technology Stack
+
+| Category | Technology |
+|----------|------------|
+| Language | Python |
+| Framework | Streamlit |
+| Motion Processing | NumPy • SciPy |
+| Visualization | Matplotlib • PyVista |
+| Video Rendering | ImageIO • FFmpeg |
+| Reporting | ReportLab |
+| Database | SQLite |
+| Deployment | Docker • Render |
+| Version Control | GitHub |
+
+---
+
+# Software Workflow
+
+```text
+Tracking JSON
+      │
+      ▼
 Motion Reconstruction
-3D skeleton visualization
-Ball trajectory reconstruction
-Shot event detection
-Release analysis
-Smooth MP4 playback
-Side-by-side comparison
-Biomechanics
-Joint sequencing
-Kinetic-chain analysis
-Phase biomechanics
-Release mechanics
-Timing analysis
-Consistency measurements
-Player Development
-Session grading
-Development timelines
-Historical progress
-Coaching priorities
-Drill recommendations
-Practice summaries
-Team Management
-Organizations
-Teams
-Rosters
-Practice sessions
-Player profiles
-Team dashboards
-Reporting
-Session Reports
-Player Development Reports
-Team Practice Reports
-Session Comparison Reports
-Executive summaries
-Professional PDF exports
-Data
+      │
+      ▼
+Shot Event Detection
+      │
+      ▼
+Biomechanics Analysis
+      │
+      ▼
+Player Development Intelligence
+      │
+      ▼
+Professional Reports
+```
 
-The application is designed for structured basketball free-throw tracking JSON files.
+---
 
-Each file contains a complete tracked free-throw attempt, including:
+# Screenshots
 
-Ball coordinates
-Player body keypoints
-Frame timing
-Participant ID
-Trial ID
-Shot outcome (made/missed)
+Add screenshots or GIFs here.
 
-The public portfolio includes a curated demonstration dataset based on the SPL Open Data free-throw dataset.
+Suggested order:
 
-Technology Stack
-Python
-Streamlit
-NumPy
-Matplotlib
-PyVista
-VTK
-ImageIO / FFmpeg
-ReportLab
-SQLite
-Docker
-GitHub
-Render
-Workflow
+1. Dashboard
+2. Smooth MP4 Playback
+3. Comparison Studio
+4. Player Development Timeline
+5. Team Dashboard
+6. PDF Report
 
-The platform supports two workflows.
+---
 
-Blank Workspace
+# Local Installation
 
-Designed for users who want to analyze their own compatible free-throw tracking JSON files.
+## Clone Repository
 
-Users can:
+```bash
+git clone https://github.com/ankitwadera/ANKIT-FREE-THROW-TRACKING-PROJECT.git
+```
 
-Create organizations
-Create teams
-Create players
-Upload tracking files
-Build practice sessions
-Analyze mechanics
-Generate reports
-Executive Demo
+## Create Virtual Environment
 
-A fully populated demonstration environment showcasing the complete workflow using a curated portfolio dataset.
+```bash
+python -m venv .venv
+```
 
-The demonstration includes:
+## Install Dependencies
 
-Organizations
-Teams
-Players
-Practice sessions
-Player development history
-Team dashboards
-Executive reporting
-PDF exports
-Technical Demonstration
+```bash
+pip install -r requirements.txt
+```
 
-This repository demonstrates experience in:
+## Run Application
 
-Sports analytics
-Basketball biomechanics
-Motion analysis
-Software engineering
-Python application development
-Data visualization
-Database design
-User interface design
-Product development
-Cloud deployment
-Disclaimer
+PowerShell
 
-This software demonstrates analytical workflows using structured basketball tracking data.
+```powershell
+$env:PYTHONPATH = (Get-Location).Path
+$env:APP_MODE = "private"
+$env:ANKIT_APP_DATA_ROOT = "data"
 
-The demonstration dataset is derived from the SPL Open Data free-throw dataset. Player names used within the Executive Demo are portfolio labels intended to demonstrate software functionality and do not represent tracking data collected from those athletes.
+.\.venv\Scripts\python.exe -m streamlit run tracking_app\research\shot_analysis_app.py
+```
 
-Contact
+---
 
-Ankit Wadera
+# Docker
+
+Build
+
+```bash
+docker build -t ankit-free-throw-analysis .
+```
+
+Run
+
+```bash
+docker run --rm -p 10000:10000 ankit-free-throw-analysis
+```
+
+Open
+
+```
+http://localhost:10000
+```
+
+---
+
+# Cloud Deployment
+
+The project includes Docker and Render configuration.
+
+Deployment requires:
+
+- GitHub
+- Docker
+- Render
+
+The public deployment provides:
+
+- Blank Workspace
+- Executive Demo
+- Browser-based analysis
+- Professional reporting
+
+---
+
+# Roadmap
+
+Future improvements include:
+
+- Multi-camera synchronization
+- Additional basketball movements
+- AI-assisted coaching recommendations
+- Expanded biomechanics dashboards
+- Organization-level analytics
+- Multi-user authentication
+
+---
+
+# Data Disclaimer
+
+The demonstration dataset originates from the SPL Open Data basketball
+free-throw dataset.
+
+Player names shown within the Executive Demo are portfolio labels used only
+to demonstrate software workflows and should not be interpreted as actual
+tracking data collected from those athletes or organizations.
+
+---
+
+# Author
+
+## Ankit Wadera
+
+Basketball Analytics • Player Development • Software Engineering
+
 📧 ankitwadera2@gmail.com
+
+---
+
+MIT License
