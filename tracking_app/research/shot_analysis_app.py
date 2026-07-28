@@ -3814,10 +3814,21 @@ def render_tracking_video_bytes(
         1.0,
     )
 
+    # Keep the encoded video smooth at every speed. Slow motion is created
+    # by repeating source frames instead of lowering the video frame rate.
     output_fps = max(
-        5.0,
-        source_fps
-        * speed_multiplier,
+        24.0,
+        source_fps,
+    )
+
+    frame_repeat = max(
+        1,
+        int(
+            round(
+                1.0
+                / speed_multiplier
+            )
+        ),
     )
 
     with tempfile.NamedTemporaryFile(
@@ -3834,8 +3845,15 @@ def render_tracking_video_bytes(
             fps=output_fps,
             codec="libx264",
             quality=7,
-            macro_block_size=None,
+            pixelformat="yuv420p",
+            macro_block_size=16,
             ffmpeg_log_level="error",
+            output_params=[
+                "-movflags",
+                "+faststart",
+                "-preset",
+                "veryfast",
+            ],
         )
 
         try:
@@ -3860,9 +3878,12 @@ def render_tracking_video_bytes(
                     figure
                 )
 
-                writer.append_data(
-                    frame_image
-                )
+                for _ in range(
+                    frame_repeat
+                ):
+                    writer.append_data(
+                        frame_image
+                    )
 
                 plt.close(
                     figure
@@ -3941,12 +3962,12 @@ def render_smooth_video_player(
 
     render_clicked = st.button(
         (
-            "Generate Optional MP4"
+            "Generate Smooth MP4"
             if (
                 f"{widget_prefix}_video_bytes"
                 not in st.session_state
             )
-            else "Regenerate Optional MP4"
+            else "Regenerate Smooth MP4"
         ),
         key=(
             f"{widget_prefix}_render_video"
@@ -4007,7 +4028,7 @@ def render_smooth_video_player(
         in st.session_state
     ):
         st.info(
-            "Playback settings changed. Select **Regenerate Optional MP4** "
+            "Playback settings changed. Select **Regenerate Smooth MP4** "
             "to create the updated version."
         )
 
@@ -4046,7 +4067,7 @@ def render_smooth_video_player(
 
     else:
         st.info(
-            "Select **Generate Optional MP4** to create a browser-native video. "
+            "Select **Generate Smooth MP4** to create a browser-native video. "
             "The first render may take time, but playback will then be smooth "
             "and the result will be cached."
         )
@@ -4295,10 +4316,21 @@ def render_smooth_comparison_video_bytes(
         1.0,
     )
 
+    # Keep the encoded video smooth at every speed. Slow motion is created
+    # by repeating source frames instead of lowering the video frame rate.
     output_fps = max(
-        5.0,
-        source_fps
-        * speed_multiplier,
+        24.0,
+        source_fps,
+    )
+
+    frame_repeat = max(
+        1,
+        int(
+            round(
+                1.0
+                / speed_multiplier
+            )
+        ),
     )
 
     with tempfile.NamedTemporaryFile(
@@ -4315,8 +4347,15 @@ def render_smooth_comparison_video_bytes(
             fps=output_fps,
             codec="libx264",
             quality=7,
-            macro_block_size=None,
+            pixelformat="yuv420p",
+            macro_block_size=16,
             ffmpeg_log_level="error",
+            output_params=[
+                "-movflags",
+                "+faststart",
+                "-preset",
+                "veryfast",
+            ],
         )
 
         try:
@@ -4371,9 +4410,12 @@ def render_smooth_comparison_video_bytes(
                     comparison_image,
                 )
 
-                writer.append_data(
-                    combined_image
-                )
+                for _ in range(
+                    frame_repeat
+                ):
+                    writer.append_data(
+                        combined_image
+                    )
 
                 plt.close(
                     current_figure
@@ -4425,7 +4467,7 @@ def render_smooth_comparison_player(
         return
 
     st.markdown(
-        "### Smooth Comparison Video"
+        "### Synchronized Split-Screen MP4"
     )
 
     first_row = st.columns(
@@ -4599,10 +4641,10 @@ def render_smooth_comparison_player(
 
     render_clicked = st.button(
         (
-            "Generate Smooth Comparison"
+            "Generate Split-Screen MP4"
             if video_key
             not in st.session_state
-            else "Regenerate Smooth Comparison"
+            else "Regenerate Split-Screen MP4"
         ),
         type="primary",
         use_container_width=True,
@@ -4672,7 +4714,7 @@ def render_smooth_comparison_player(
         )
 
         st.download_button(
-            label="Download Smooth Comparison MP4",
+            label="Download Split-Screen Comparison MP4",
             data=saved_video,
             file_name=(
                 f"{feature_record.participant_id}_"
@@ -4694,8 +4736,214 @@ def render_smooth_comparison_player(
     else:
         st.info(
             "Choose the alignment, speed, camera, trajectory, and frame "
-            "window, then select **Generate Smooth Comparison**."
+            "window, then select **Generate Split-Screen MP4**."
         )
+
+
+def render_comparison_studio_workspace(
+    shooting_side: str,
+) -> None:
+    """
+    Upload or reuse two free throws and render one synchronized split-screen MP4.
+    """
+
+    st.markdown(
+        """
+        <div class="bms-upload-shell">
+            <strong>Upload two free-throw tracking files</strong><br>
+            Shot 1 can reuse the file already analyzed in Single Shot Analysis.
+            Shot 2 is uploaded directly here. The final result is one
+            synchronized split-screen MP4 with both shots inside the same video.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    existing_data = st.session_state.get(
+        "analysis_trial_data"
+    )
+    existing_filename = st.session_state.get(
+        "analysis_filename"
+    )
+
+    use_existing = False
+
+    if existing_data is not None:
+        use_existing = st.checkbox(
+            (
+                "Use current Single Shot Analysis file as Shot 1 "
+                f"({existing_filename or 'loaded shot'})"
+            ),
+            value=True,
+            key="comparison_use_existing_shot_one",
+        )
+
+    left, right = st.columns(
+        2,
+        gap="large",
+    )
+
+    with left:
+        shot_one_upload = None
+
+        if use_existing:
+            st.success(
+                f"Shot 1: {existing_filename or 'current single shot'}"
+            )
+        else:
+            shot_one_upload = st.file_uploader(
+                "Shot 1 — Free-Throw Tracking JSON",
+                type=["json"],
+                accept_multiple_files=False,
+                key="comparison_studio_shot_one_upload",
+            )
+
+    with right:
+        shot_two_upload = st.file_uploader(
+            "Shot 2 — Free-Throw Tracking JSON",
+            type=["json"],
+            accept_multiple_files=False,
+            key="comparison_studio_shot_two_upload",
+        )
+
+    try:
+        if use_existing:
+            shot_one_data = existing_data
+            shot_one_filename = (
+                existing_filename
+                or "single_shot.json"
+            )
+        elif shot_one_upload is not None:
+            shot_one_data = validate_uploaded_json(
+                json.loads(
+                    shot_one_upload.getvalue()
+                )
+            )
+            shot_one_filename = shot_one_upload.name
+        else:
+            shot_one_data = None
+            shot_one_filename = None
+
+        if shot_two_upload is not None:
+            shot_two_data = validate_uploaded_json(
+                json.loads(
+                    shot_two_upload.getvalue()
+                )
+            )
+            shot_two_filename = shot_two_upload.name
+        else:
+            shot_two_data = None
+            shot_two_filename = None
+
+    except Exception as error:
+        st.error(
+            (
+                "Could not read one of the comparison JSON files. "
+                f"{type(error).__name__}: {error}"
+            )
+        )
+        return
+
+    if (
+        shot_one_data is None
+        or shot_two_data is None
+    ):
+        st.info(
+            "Provide both Shot 1 and Shot 2 to build the comparison."
+        )
+        return
+
+    metrics = st.columns(
+        4
+    )
+
+    metrics[0].metric(
+        "Shot 1 participant",
+        shot_one_data.get(
+            "participant_id",
+            "Unknown",
+        ),
+    )
+    metrics[1].metric(
+        "Shot 1 trial",
+        shot_one_data.get(
+            "trial_id",
+            Path(
+                shot_one_filename
+            ).stem,
+        ),
+    )
+    metrics[2].metric(
+        "Shot 2 participant",
+        shot_two_data.get(
+            "participant_id",
+            "Unknown",
+        ),
+    )
+    metrics[3].metric(
+        "Shot 2 trial",
+        shot_two_data.get(
+            "trial_id",
+            Path(
+                shot_two_filename
+            ).stem,
+        ),
+    )
+
+    prepared_signature = (
+        trial_cache_key(
+            shot_one_data
+        ),
+        shot_one_filename,
+        shooting_side,
+    )
+
+    if (
+        st.session_state.get(
+            "comparison_primary_result_signature"
+        )
+        != prepared_signature
+    ):
+        with st.spinner(
+            "Preparing event timing for the synchronized comparison..."
+        ):
+            try:
+                primary_result = analyze_uploaded_trial(
+                    trial_data=shot_one_data,
+                    original_filename=shot_one_filename,
+                    shooting_side=shooting_side,
+                )
+            except Exception as error:
+                st.error(
+                    (
+                        "Shot 1 could not be prepared. "
+                        f"{type(error).__name__}: {error}"
+                    )
+                )
+                return
+
+        st.session_state[
+            "comparison_primary_result"
+        ] = primary_result
+        st.session_state[
+            "comparison_primary_result_signature"
+        ] = prepared_signature
+
+    primary_result = st.session_state.get(
+        "comparison_primary_result"
+    )
+
+    if primary_result is None:
+        return
+
+    render_smooth_comparison_player(
+        result=primary_result,
+        current_trial_data=shot_one_data,
+        comparison_trial_data=shot_two_data,
+        current_filename=shot_one_filename,
+        comparison_filename=shot_two_filename,
+        shooting_side=shooting_side,
+    )
 
 
 def initialize_playback_state() -> None:
@@ -18268,55 +18516,23 @@ def display_results(
     )
 
     section_title(
-        "Interactive shot review",
+        "Smooth MP4 shot playback",
         (
-            "Review the tracked attempt immediately without waiting for video "
-            "encoding. Scrub frame by frame or jump directly to detected shot "
-            "events."
+            "Generate one browser-native MP4 and use the normal video controls "
+            "to play, pause, scrub, seek, replay, enter fullscreen, or download "
+            "the shot."
         ),
     )
 
     with st.expander(
-        "Open frame-by-frame biomechanics playback",
+        "Generate and control the smooth shot MP4",
         expanded=True,
     ):
-        render_interactive_playback(
-            result=result,
+        render_smooth_video_player(
             trial_data=trial_data,
-            shooting_side=shooting_side,
+            title="Complete Shot MP4",
+            widget_prefix="current_shot",
         )
-
-    if (
-        st.session_state.comparison_enabled
-        and st.session_state.comparison_trial_data
-        is not None
-    ):
-        section_title(
-            "Side-by-side shot comparison",
-            (
-                "Compare the current shot with another tracked attempt using "
-                "event-aligned frame-by-frame playback."
-            ),
-        )
-
-        with st.expander(
-            "Open interactive frame-by-frame comparison",
-            expanded=True,
-        ):
-            render_side_by_side_comparison(
-                result=result,
-                current_trial_data=trial_data,
-                comparison_trial_data=(
-                    st.session_state
-                    .comparison_trial_data
-                ),
-                comparison_filename=(
-                    st.session_state
-                    .comparison_filename
-                    or "comparison.json"
-                ),
-                shooting_side=shooting_side,
-            )
 
     if summary is None:
         st.warning(
@@ -18528,57 +18744,6 @@ def display_results(
             ],
             expanded=False,
         )
-
-    section_title(
-        "Optional video exports",
-        (
-            "Analysis results are already complete. Generate an MP4 only when "
-            "you need a downloadable browser-native video. Encoding can take "
-            "several minutes on a free hosted server."
-        ),
-    )
-
-    with st.expander(
-        "Generate optional MP4 video exports",
-        expanded=False,
-    ):
-        st.warning(
-            (
-                "MP4 generation renders every tracking frame and then encodes "
-                "the result with FFmpeg. This is intentionally separate from "
-                "the main analysis so metrics, biomechanics, playback, and "
-                "reports appear without waiting."
-            )
-        )
-
-        render_smooth_video_player(
-            trial_data=trial_data,
-            title="Complete Shot MP4",
-            widget_prefix="current_shot",
-        )
-
-        if (
-            st.session_state.comparison_enabled
-            and st.session_state.comparison_trial_data
-            is not None
-        ):
-            st.markdown("---")
-
-            render_smooth_comparison_player(
-                result=result,
-                current_trial_data=trial_data,
-                comparison_trial_data=(
-                    st.session_state
-                    .comparison_trial_data
-                ),
-                current_filename=uploaded_name,
-                comparison_filename=(
-                    st.session_state
-                    .comparison_filename
-                    or "comparison.json"
-                ),
-                shooting_side=shooting_side,
-            )
 
     package = create_download_zip(
         uploaded_name=uploaded_name,
@@ -19272,81 +19437,6 @@ def main() -> None:
                 f"Personal diagnostics: **{diagnostic_status}**"
             )
 
-        if (
-            is_public_mode()
-            or workspace
-            in {
-                "Comparison Studio",
-                "Full Studio",
-            }
-        ):
-            st.markdown(
-                "---"
-            )
-
-            st.markdown(
-                "### Comparison mode"
-            )
-
-            comparison_upload = st.file_uploader(
-                "Upload a Comparison Free-Throw Tracking JSON",
-                type=[
-                    "json",
-                ],
-                accept_multiple_files=False,
-                key="comparison_json_upload",
-                help=(
-                    "Use another tracked free throw, ideally a made shot from "
-                    "the same participant."
-                ),
-            )
-
-            if comparison_upload is not None:
-                try:
-                    load_comparison_upload(
-                        comparison_upload
-                    )
-
-                    comparison_data = (
-                        st.session_state
-                        .comparison_trial_data
-                    )
-
-                    st.success(
-                        (
-                            "Comparison loaded: "
-                            f"{comparison_data.get('participant_id', 'Unknown')} · "
-                            f"{comparison_data.get('trial_id', Path(comparison_upload.name).stem)}"
-                        )
-                    )
-
-                except Exception as error:
-                    clear_comparison_state()
-
-                    st.error(
-                        (
-                            "Could not load comparison JSON: "
-                            f"{type(error).__name__}: {error}"
-                        )
-                    )
-
-            if (
-                st.session_state
-                .comparison_trial_data
-                is not None
-            ):
-                st.toggle(
-                    "Enable side-by-side comparison",
-                    key="comparison_enabled",
-                )
-
-                if st.button(
-                    "Clear Comparison",
-                    use_container_width=True,
-                ):
-                    clear_comparison_state()
-                    st.rerun()
-
         st.markdown(
             "---"
         )
@@ -19649,21 +19739,24 @@ def main() -> None:
             render_player_history_manager()
             render_practice_session_manager()
 
-    section_title(
-        (
+    if workspace == "Comparison Studio":
+        section_title(
+            "Comparison Studio",
             (
-                "Comparison Studio"
-                if workspace == "Comparison Studio"
-                else "Analyze a tracked free throw"
-            )
-            if not is_public_mode()
-            else "Run the public shot-analysis demonstration"
-        ),
-        (
-            "Upload one JSON trial, verify the detected participant, then run the analysis."
-            if not is_public_mode()
-            else "Use a compatible tracked free-throw JSON to explore the complete analysis workflow."
-        ),
+                "Upload two compatible free-throw tracking JSON files and "
+                "generate one smooth synchronized split-screen MP4."
+            ),
+        )
+
+        render_comparison_studio_workspace(
+            shooting_side=shooting_side,
+        )
+
+        return
+
+    section_title(
+        "Analyze a tracked free throw",
+        "Upload one JSON trial, verify the detected participant, then run the analysis.",
     )
 
     st.markdown(
