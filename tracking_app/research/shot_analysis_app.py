@@ -18,6 +18,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 import imageio.v2 as imageio
 import numpy as np
 import streamlit as st
+from PIL import Image, ImageDraw
 
 from tracking_app.analyzer import ShotAnalyzer
 from tracking_app.basketball_event_mapper import BasketballEventMapper
@@ -3456,6 +3457,303 @@ def ball_trajectory_until_frame(
     )
 
 
+def project_tracking_point(
+    point: np.ndarray,
+    view_name: str,
+) -> tuple[float, float]:
+    x_value = float(point[0])
+    y_value = float(point[1])
+    z_value = float(point[2])
+
+    if view_name == "Side":
+        return x_value, z_value
+    if view_name == "Front":
+        return y_value, z_value
+    if view_name == "Top":
+        return x_value, y_value
+
+    return (
+        (x_value - y_value) / np.sqrt(2.0),
+        z_value,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def cached_projected_bounds(
+    trial_json_text: str,
+    view_name: str,
+) -> tuple[
+    tuple[float, float],
+    tuple[float, float],
+]:
+    trial_data = json.loads(trial_json_text)
+    horizontal_values = []
+    vertical_values = []
+
+    for tracking_frame in trial_data.get("tracking", []):
+        payload = tracking_frame.get("data", {})
+        points = []
+
+        ball = finite_point(payload.get("ball"))
+        if ball is not None:
+            points.append(ball)
+
+        player = payload.get("player", {})
+        if isinstance(player, dict):
+            for value in player.values():
+                point = finite_point(value)
+                if point is not None:
+                    points.append(point)
+
+        for point in points:
+            projected_x, projected_y = project_tracking_point(
+                point,
+                view_name,
+            )
+            horizontal_values.append(projected_x)
+            vertical_values.append(projected_y)
+
+    if not horizontal_values:
+        return (0.0, 40.0), (0.0, 15.0)
+
+    def padded(values, minimum_span, padding_fraction):
+        minimum = float(min(values))
+        maximum = float(max(values))
+        span = max(minimum_span, maximum - minimum)
+        padding = span * padding_fraction
+        return minimum - padding, maximum + padding
+
+    return (
+        padded(horizontal_values, 8.0, 0.12),
+        padded(vertical_values, 8.0, 0.12),
+    )
+
+
+def render_fast_tracking_frame(
+    trial_data: dict,
+    frame_index: int,
+    view_name: str,
+    show_trajectory: bool,
+    title: str,
+    width: int = 640,
+    height: int = 520,
+) -> np.ndarray:
+    canvas = Image.new(
+        "RGB",
+        (width, height),
+        (247, 249, 252),
+    )
+    draw = ImageDraw.Draw(canvas)
+
+    margin_left = 48
+    margin_right = 24
+    margin_top = 58
+    margin_bottom = 44
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+
+    bounds = cached_projected_bounds(
+        json.dumps(trial_data, allow_nan=True),
+        view_name,
+    )
+
+    horizontal_minimum, horizontal_maximum = bounds[0]
+    vertical_minimum, vertical_maximum = bounds[1]
+    horizontal_span = max(
+        1e-9,
+        horizontal_maximum - horizontal_minimum,
+    )
+    vertical_span = max(
+        1e-9,
+        vertical_maximum - vertical_minimum,
+    )
+
+    def pixel(point):
+        projected_x, projected_y = project_tracking_point(
+            point,
+            view_name,
+        )
+
+        x_pixel = (
+            margin_left
+            + (
+                projected_x - horizontal_minimum
+            )
+            / horizontal_span
+            * plot_width
+        )
+        y_pixel = (
+            margin_top
+            + plot_height
+            - (
+                projected_y - vertical_minimum
+            )
+            / vertical_span
+            * plot_height
+        )
+        return int(round(x_pixel)), int(round(y_pixel))
+
+    draw.rounded_rectangle(
+        (
+            margin_left,
+            margin_top,
+            margin_left + plot_width,
+            margin_top + plot_height,
+        ),
+        radius=18,
+        fill=(255, 255, 255),
+        outline=(221, 227, 236),
+        width=2,
+    )
+
+    for fraction in (0.25, 0.50, 0.75):
+        x_position = int(
+            margin_left + plot_width * fraction
+        )
+        y_position = int(
+            margin_top + plot_height * fraction
+        )
+
+        draw.line(
+            (
+                x_position,
+                margin_top,
+                x_position,
+                margin_top + plot_height,
+            ),
+            fill=(235, 239, 245),
+            width=1,
+        )
+        draw.line(
+            (
+                margin_left,
+                y_position,
+                margin_left + plot_width,
+                y_position,
+            ),
+            fill=(235, 239, 245),
+            width=1,
+        )
+
+    current_frame = frame_data(
+        trial_data,
+        frame_index,
+    )
+    payload = current_frame.get("data", {})
+    player = payload.get("player", {})
+
+    if show_trajectory and frame_index > 0:
+        trajectory = ball_trajectory_until_frame(
+            trial_data,
+            frame_index,
+        )
+        trajectory_pixels = [
+            pixel(point)
+            for point in trajectory
+        ]
+
+        if len(trajectory_pixels) >= 2:
+            draw.line(
+                trajectory_pixels,
+                fill=(234, 104, 42),
+                width=4,
+                joint="curve",
+            )
+
+    if isinstance(player, dict):
+        for first_name, second_name in SKELETON_CONNECTIONS:
+            first_point = finite_point(
+                player.get(first_name)
+            )
+            second_point = finite_point(
+                player.get(second_name)
+            )
+
+            if (
+                first_point is None
+                or second_point is None
+            ):
+                continue
+
+            first_pixel = pixel(first_point)
+            second_pixel = pixel(second_point)
+
+            draw.line(
+                (
+                    first_pixel[0],
+                    first_pixel[1],
+                    second_pixel[0],
+                    second_pixel[1],
+                ),
+                fill=(31, 55, 91),
+                width=5,
+            )
+
+        for point_value in player.values():
+            point = finite_point(point_value)
+            if point is None:
+                continue
+
+            center_x, center_y = pixel(point)
+            radius = 4
+
+            draw.ellipse(
+                (
+                    center_x - radius,
+                    center_y - radius,
+                    center_x + radius,
+                    center_y + radius,
+                ),
+                fill=(31, 55, 91),
+            )
+
+    ball = finite_point(payload.get("ball"))
+
+    if ball is not None:
+        center_x, center_y = pixel(ball)
+        radius = 9
+
+        draw.ellipse(
+            (
+                center_x - radius,
+                center_y - radius,
+                center_x + radius,
+                center_y + radius,
+            ),
+            fill=(244, 112, 45),
+            outline=(161, 66, 20),
+            width=2,
+        )
+
+    sampling_rate = float(
+        trial_data.get("sampling_rate", 30)
+    )
+    time_value = current_frame.get(
+        "time",
+        frame_index / sampling_rate * 1000.0,
+    )
+
+    draw.text(
+        (margin_left, 18),
+        title,
+        fill=(20, 32, 51),
+    )
+    draw.text(
+        (margin_left, height - 28),
+        (
+            f"{view_name} view  |  "
+            f"Frame {frame_index}  |  "
+            f"{float(time_value):.0f} ms"
+        ),
+        fill=(91, 103, 123),
+    )
+
+    return np.asarray(
+        canvas,
+        dtype=np.uint8,
+    )
+
+
 def create_playback_figure(
     trial_data: dict,
     frame_index: int,
@@ -3862,20 +4160,17 @@ def render_tracking_video_bytes(
                     tracking
                 )
             ):
-                figure = create_playback_figure(
+                frame_image = render_fast_tracking_frame(
                     trial_data=trial_data,
                     frame_index=frame_index,
                     view_name=view_name,
                     show_trajectory=show_trajectory,
-                )
-
-                figure.set_size_inches(
-                    7.2,
-                    5.6,
-                )
-
-                frame_image = figure_to_rgb_array(
-                    figure
+                    title=(
+                        f"{trial_data.get('participant_id', 'Participant')} · "
+                        f"{trial_data.get('trial_id', 'Trial')}"
+                    ),
+                    width=720,
+                    height=560,
                 )
 
                 for _ in range(
@@ -3884,10 +4179,6 @@ def render_tracking_video_bytes(
                     writer.append_data(
                         frame_image
                     )
-
-                plt.close(
-                    figure
-                )
 
         finally:
             writer.close()
@@ -4373,36 +4664,32 @@ def render_smooth_comparison_video_bytes(
                     ),
                 )
 
-                current_figure = create_playback_figure(
+                current_image = render_fast_tracking_frame(
                     trial_data=current_trial_data,
                     frame_index=current_frame,
                     view_name=view_name,
                     show_trajectory=show_trajectory,
+                    title=(
+                        f"Shot 1 · "
+                        f"{current_trial_data.get('participant_id', 'Participant')} · "
+                        f"{current_trial_data.get('trial_id', 'Trial')}"
+                    ),
+                    width=640,
+                    height=520,
                 )
 
-                comparison_figure = create_playback_figure(
+                comparison_image = render_fast_tracking_frame(
                     trial_data=comparison_trial_data,
                     frame_index=comparison_frame,
                     view_name=view_name,
                     show_trajectory=show_trajectory,
-                )
-
-                current_figure.set_size_inches(
-                    6.4,
-                    5.2,
-                )
-
-                comparison_figure.set_size_inches(
-                    6.4,
-                    5.2,
-                )
-
-                current_image = figure_to_rgb_array(
-                    current_figure
-                )
-
-                comparison_image = figure_to_rgb_array(
-                    comparison_figure
+                    title=(
+                        f"Shot 2 · "
+                        f"{comparison_trial_data.get('participant_id', 'Participant')} · "
+                        f"{comparison_trial_data.get('trial_id', 'Trial')}"
+                    ),
+                    width=640,
+                    height=520,
                 )
 
                 combined_image = combine_rgb_frames(
@@ -4416,14 +4703,6 @@ def render_smooth_comparison_video_bytes(
                     writer.append_data(
                         combined_image
                     )
-
-                plt.close(
-                    current_figure
-                )
-
-                plt.close(
-                    comparison_figure
-                )
 
         finally:
             writer.close()
@@ -4653,7 +4932,7 @@ def render_smooth_comparison_player(
 
     if render_clicked:
         with st.spinner(
-            "Rendering the synchronized side-by-side comparison..."
+            "Rendering the optimized synchronized split-screen MP4. The finished video will appear when encoding is complete..."
         ):
             video_bytes = (
                 render_smooth_comparison_video_bytes(
@@ -16162,6 +16441,160 @@ def render_global_search_workspace() -> None:
         )
 
 
+def render_executive_demo_basic_fallback(
+    selected_player: object,
+    selected_session: object,
+    original_error: Exception,
+) -> None:
+    session_repository = get_practice_session_repository()
+    organization_repository = get_organization_team_repository()
+
+    shots = session_repository.list_session_shots(
+        selected_session.session_id
+    )
+
+    made_count = sum(
+        1
+        for shot in shots
+        if safe_result(
+            shot.recorded_result
+        )
+        == "made"
+    )
+    missed_count = sum(
+        1
+        for shot in shots
+        if safe_result(
+            shot.recorded_result
+        )
+        == "missed"
+    )
+    make_percentage = (
+        made_count / len(shots) * 100.0
+        if shots
+        else 0.0
+    )
+
+    st.warning(
+        (
+            "The hosted Executive Demo is showing its database-backed "
+            "overview because the optional historical research baseline is "
+            "not packaged in this container. The roster, sessions, tracked "
+            "files, shot review, and workspace navigation remain available."
+        )
+    )
+
+    metrics = st.columns(4)
+    metrics[0].metric("Tracked shots", len(shots))
+    metrics[1].metric("Made", made_count)
+    metrics[2].metric("Missed", missed_count)
+    metrics[3].metric(
+        "Make percentage",
+        f"{make_percentage:.1f}%",
+    )
+
+    st.markdown("### Featured session")
+
+    st.markdown(
+        f"""
+        <div class="bms-score-card">
+            <div class="bms-kicker">Selected player and session</div>
+            <h3 style="margin:0 0 0.45rem;color:#152033;">
+                {selected_player.display_name}
+            </h3>
+            <p style="margin:0;color:#455066;line-height:1.6;">
+                {selected_session.session_name} ·
+                {selected_session.session_date} ·
+                {selected_session.session_type}
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if shots:
+        st.dataframe(
+            [
+                {
+                    "Trial": shot.trial_id,
+                    "Result": shot.recorded_result,
+                    "Original file": shot.original_filename,
+                }
+                for shot in shots
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    active_teams = organization_repository.list_teams(
+        include_inactive=False
+    )
+
+    if active_teams:
+        st.markdown(
+            "### Organization and team context"
+        )
+        st.dataframe(
+            [
+                {
+                    "Organization": team.organization_name,
+                    "Team": team.team_name,
+                    "Season": team.season_name,
+                    "Level": team.level,
+                }
+                for team in active_teams
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    navigation = st.columns(3)
+
+    if navigation[0].button(
+        "Open Session Analysis",
+        use_container_width=True,
+        key="executive_fallback_open_session",
+    ):
+        st.session_state[
+            "session_analysis_player"
+        ] = selected_player
+        st.session_state[
+            "session_analysis_session"
+        ] = selected_session
+        request_workspace_navigation(
+            "Session Analysis"
+        )
+
+    if navigation[1].button(
+        "Open Player Development",
+        use_container_width=True,
+        key="executive_fallback_open_development",
+    ):
+        request_workspace_navigation(
+            "Player Development"
+        )
+
+    if navigation[2].button(
+        "Open Team Dashboard",
+        use_container_width=True,
+        key="executive_fallback_open_team",
+    ):
+        request_workspace_navigation(
+            "Team Dashboard"
+        )
+
+    with st.expander(
+        "Technical deployment note",
+        expanded=False,
+    ):
+        st.code(
+            (
+                f"{type(original_error).__name__}: "
+                f"{original_error}"
+            )
+        )
+
+
 def render_executive_demo_workspace() -> None:
     """
     Guided, read-only front-office demonstration using existing project data.
@@ -16285,11 +16718,10 @@ def render_executive_demo_workspace() -> None:
         )
 
     except Exception as error:
-        st.error(
-            (
-                "Could not prepare the executive demonstration. "
-                f"{type(error).__name__}: {error}"
-            )
+        render_executive_demo_basic_fallback(
+            selected_player=selected_player,
+            selected_session=selected_session,
+            original_error=error,
         )
 
         return
