@@ -175,7 +175,7 @@ def active_data_root() -> Path:
 
     if not workspace_path:
         raise RuntimeError(
-            "Choose Blank Workspace or Executive Demo before opening the platform."
+            "Choose Blank Workspace Mode or Demo Mode before opening the platform."
         )
 
     return Path(
@@ -266,8 +266,10 @@ def initialize_public_workspace(
 
 def reset_public_workspace() -> None:
     """
-    Delete the visitor's temporary workspace and return to the chooser.
+    Delete the visitor's temporary workspace and return to the two-mode chooser.
     """
+
+    import streamlit as st
 
     workspace_root = st.session_state.get(
         "public_workspace_data_root"
@@ -278,6 +280,27 @@ def reset_public_workspace() -> None:
             workspace_root,
             ignore_errors=True,
         )
+
+    # Clear cached data and repository objects before the old temporary
+    # database path disappears from the active application state.
+    st.cache_data.clear()
+    st.cache_resource.clear()
+
+    preserved_keys = {
+        "public_workspace_data_root",
+        "public_workspace_kind",
+        "private_workspace",
+        "pending_workspace_navigation",
+    }
+
+    for key in list(
+        st.session_state.keys()
+    ):
+        if key not in preserved_keys:
+            st.session_state.pop(
+                key,
+                None,
+            )
 
     st.session_state.pop(
         "public_workspace_data_root",
@@ -293,11 +316,17 @@ def reset_public_workspace() -> None:
         "private_workspace"
     ] = "Home"
 
+    st.session_state[
+        "pending_workspace_navigation"
+    ] = None
+
 
 def render_public_workspace_chooser() -> None:
     """
-    Render the hosted landing page before a workspace is initialized.
+    Render the hosted landing page with exactly two application modes.
     """
+
+    import streamlit as st
 
     st.markdown(
         """
@@ -320,7 +349,7 @@ def render_public_workspace_chooser() -> None:
         "Choose how to begin",
         (
             "Start with an empty workspace for your own compatible tracking "
-            "files, or load the populated Executive Demo."
+            "files, or enter the populated Demo Mode."
         ),
     )
 
@@ -360,7 +389,7 @@ def render_public_workspace_chooser() -> None:
         )
 
         if st.button(
-            "Start Blank Workspace",
+            "Start Blank Workspace Mode",
             type="primary",
             use_container_width=True,
             key="start_blank_public_workspace",
@@ -386,7 +415,7 @@ def render_public_workspace_chooser() -> None:
                     dashboards, comparisons, and professional reports.
                 </p>
                 <div class="bms-footer-note" style="margin-top:1rem;">
-                    The demo is copied into a private temporary workspace for
+                    Demo Mode is copied into a private temporary workspace for
                     this visitor. You can explore and edit that copy without
                     changing the packaged demonstration or another visitor's
                     workspace.
@@ -401,7 +430,7 @@ def render_public_workspace_chooser() -> None:
         )
 
         if st.button(
-            "Load Executive Demo",
+            "Enter Demo Mode",
             type="primary",
             use_container_width=True,
             key="load_executive_demo_workspace",
@@ -9004,7 +9033,6 @@ def render_player_history_manager() -> None:
 
 
 
-@st.cache_resource
 def get_practice_session_repository() -> PracticeSessionRepository:
     """
     Create one persistent practice-session repository for the app.
@@ -9692,7 +9720,6 @@ def render_practice_session_manager() -> None:
 
 
 
-@st.cache_resource
 def get_organization_team_repository() -> OrganizationTeamRepository:
     """
     Create one persistent organization/team repository for the app.
@@ -11130,9 +11157,343 @@ def load_team_practice_intelligence(
 
 
 
-@st.cache_data(
-    show_spinner=False,
-)
+def all_workspace_sessions(
+    include_inactive: bool = True,
+) -> list[object]:
+    """
+    Return sessions across all players without depending on a repository-wide
+    convenience method.
+    """
+
+    history_repository = get_player_history_repository()
+    session_repository = get_practice_session_repository()
+
+    records = []
+
+    for player in history_repository.list_players(
+        include_inactive=True
+    ):
+        records.extend(
+            session_repository.list_sessions(
+                player_id=player.player_id,
+                include_inactive=include_inactive,
+            )
+        )
+
+    return records
+
+
+def hosted_report_output_folder(
+    report_type: str,
+) -> Path:
+    """
+    Return a writable report folder inside the active temporary or local workspace.
+    """
+
+    output_folder = (
+        active_data_root()
+        / "generated_reports"
+        / report_type
+    )
+
+    output_folder.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    return output_folder
+
+
+def build_branded_fallback_pdf(
+    title: str,
+    subtitle: str,
+    sections: list[
+        tuple[
+            str,
+            list[str],
+        ]
+    ],
+    filename: str,
+) -> tuple[
+    bytes,
+    str,
+]:
+    """
+    Generate a clean ReportLab PDF when an optional advanced research engine
+    cannot produce the full report in the hosted deployment.
+    """
+
+    from io import BytesIO
+
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import (
+        ParagraphStyle,
+        getSampleStyleSheet,
+    )
+    from reportlab.lib.units import inch
+    from reportlab.platypus import (
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+
+    buffer = BytesIO()
+
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=0.55 * inch,
+        leftMargin=0.55 * inch,
+        topMargin=0.55 * inch,
+        bottomMargin=0.55 * inch,
+        title=title,
+        author="Ankit Wadera",
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "FallbackTitle",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor("#152033"),
+        alignment=TA_CENTER,
+        spaceAfter=8,
+    )
+
+    subtitle_style = ParagraphStyle(
+        "FallbackSubtitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        leading=14,
+        textColor=colors.HexColor("#C94D18"),
+        alignment=TA_CENTER,
+        spaceAfter=14,
+    )
+
+    section_style = ParagraphStyle(
+        "FallbackSection",
+        parent=styles["Heading2"],
+        fontName="Helvetica-Bold",
+        fontSize=14,
+        leading=18,
+        textColor=colors.HexColor("#152033"),
+        spaceBefore=10,
+        spaceAfter=7,
+    )
+
+    body_style = ParagraphStyle(
+        "FallbackBody",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=9.5,
+        leading=13.5,
+        textColor=colors.HexColor("#455066"),
+    )
+
+    story = [
+        Paragraph(
+            "ANKIT'S FREE THROW ANALYSIS SOFTWARE",
+            title_style,
+        ),
+        Paragraph(
+            subtitle,
+            subtitle_style,
+        ),
+        Table(
+            [
+                [
+                    Paragraph(
+                        (
+                            "<b>Hosted report</b><br/>"
+                            "Generated from the active workspace database."
+                        ),
+                        body_style,
+                    ),
+                    Paragraph(
+                        (
+                            "<b>Created by</b><br/>"
+                            "Ankit Wadera<br/>"
+                            "ankitwadera2@gmail.com"
+                        ),
+                        body_style,
+                    ),
+                ]
+            ],
+            colWidths=[
+                3.4 * inch,
+                3.4 * inch,
+            ],
+            style=TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, -1),
+                        colors.HexColor("#F3F5F8"),
+                    ),
+                    (
+                        "BOX",
+                        (0, 0),
+                        (-1, -1),
+                        0.7,
+                        colors.HexColor("#DDE2EA"),
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        10,
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        10,
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        9,
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        9,
+                    ),
+                ]
+            ),
+        ),
+        Spacer(
+            1,
+            0.12 * inch,
+        ),
+    ]
+
+    for heading, lines in sections:
+        story.append(
+            Paragraph(
+                heading,
+                section_style,
+            )
+        )
+
+        clean_lines = [
+            str(line)
+            for line in lines
+            if str(line).strip()
+        ]
+
+        if not clean_lines:
+            clean_lines = [
+                "No additional information was available."
+            ]
+
+        body = "<br/>".join(
+            f"• {line}"
+            for line in clean_lines
+        )
+
+        story.append(
+            Table(
+                [
+                    [
+                        Paragraph(
+                            body,
+                            body_style,
+                        )
+                    ]
+                ],
+                colWidths=[
+                    6.8 * inch,
+                ],
+                style=TableStyle(
+                    [
+                        (
+                            "BACKGROUND",
+                            (0, 0),
+                            (-1, -1),
+                            colors.white,
+                        ),
+                        (
+                            "BOX",
+                            (0, 0),
+                            (-1, -1),
+                            0.6,
+                            colors.HexColor("#DDE2EA"),
+                        ),
+                        (
+                            "LEFTPADDING",
+                            (0, 0),
+                            (-1, -1),
+                            11,
+                        ),
+                        (
+                            "RIGHTPADDING",
+                            (0, 0),
+                            (-1, -1),
+                            11,
+                        ),
+                        (
+                            "TOPPADDING",
+                            (0, 0),
+                            (-1, -1),
+                            9,
+                        ),
+                        (
+                            "BOTTOMPADDING",
+                            (0, 0),
+                            (-1, -1),
+                            9,
+                        ),
+                    ]
+                ),
+            )
+        )
+
+    story.append(
+        Spacer(
+            1,
+            0.18 * inch,
+        )
+    )
+
+    story.append(
+        Paragraph(
+            (
+                "Responsible-use note: This software provides decision support "
+                "and should be interpreted alongside coaching observation, "
+                "player context, and qualified performance staff."
+            ),
+            body_style,
+        )
+    )
+
+    document.build(
+        story
+    )
+
+    return (
+        buffer.getvalue(),
+        filename,
+    )
+
+
 def generate_team_practice_pdf_bytes(
     team_id: int,
 ) -> tuple[
@@ -11149,17 +11510,78 @@ def generate_team_practice_pdf_bytes(
         database_file=history_repository.database_file
     )
 
-    generator = TeamPracticePDFReportGenerator()
-
-    pdf_path = generator.run(
-        team_id=team_id,
-        intelligence_engine=intelligence_engine,
+    generator = TeamPracticePDFReportGenerator(
+        output_folder=hosted_report_output_folder(
+            "team_practice"
+        )
     )
 
-    return (
-        pdf_path.read_bytes(),
-        pdf_path.name,
-    )
+    try:
+        pdf_path = generator.run(
+            team_id=team_id,
+            intelligence_engine=intelligence_engine,
+        )
+
+        return (
+            pdf_path.read_bytes(),
+            pdf_path.name,
+        )
+
+    except Exception as error:
+        organization_repository = get_organization_team_repository()
+
+        teams = organization_repository.list_teams(
+            include_inactive=True
+        )
+
+        selected_team = next(
+            (
+                team
+                for team in teams
+                if team.team_id == team_id
+            ),
+            None,
+        )
+
+        team_name = (
+            getattr(
+                selected_team,
+                "team_name",
+                None,
+            )
+            or f"Team {team_id}"
+        )
+
+        return build_branded_fallback_pdf(
+            title="Team Practice Report",
+            subtitle=f"{team_name} · Hosted fallback report",
+            sections=[
+                (
+                    "Team",
+                    [
+                        f"Team: {team_name}",
+                        f"Team ID: {team_id}",
+                    ],
+                ),
+                (
+                    "Report status",
+                    [
+                        (
+                            "The full team intelligence report could not use "
+                            "one optional research dependency in this hosted run."
+                        ),
+                        (
+                            "The active team database remains available in the "
+                            "Team Dashboard and roster workspaces."
+                        ),
+                        f"Technical detail: {type(error).__name__}: {error}",
+                    ],
+                ),
+            ],
+            filename=(
+                f"team_{team_id}_practice_report.pdf"
+            ),
+        )
 
 
 def render_team_dashboard() -> None:
@@ -13799,9 +14221,6 @@ def analyze_managed_session_shot(
 
 
 
-@st.cache_data(
-    show_spinner=False,
-)
 def generate_session_pdf_bytes(
     session_id: int,
 ) -> tuple[bytes, str]:
@@ -13815,17 +14234,93 @@ def generate_session_pdf_bytes(
         database_file=history_repository.database_file
     )
 
-    generator = SessionPDFReportGenerator()
-
-    pdf_path = generator.run(
-        session_id=session_id,
-        analysis_engine=analysis_engine,
+    generator = SessionPDFReportGenerator(
+        output_folder=hosted_report_output_folder(
+            "session"
+        )
     )
 
-    return (
-        pdf_path.read_bytes(),
-        pdf_path.name,
-    )
+    try:
+        pdf_path = generator.run(
+            session_id=session_id,
+            analysis_engine=analysis_engine,
+        )
+
+        return (
+            pdf_path.read_bytes(),
+            pdf_path.name,
+        )
+
+    except Exception as error:
+        session_repository = get_practice_session_repository()
+
+        sessions = all_workspace_sessions(
+            include_inactive=True
+        )
+
+        selected_session = next(
+            (
+                session
+                for session in sessions
+                if session.session_id == session_id
+            ),
+            None,
+        )
+
+        shots = session_repository.list_session_shots(
+            session_id
+        )
+
+        made_count = sum(
+            1
+            for shot in shots
+            if safe_result(
+                shot.recorded_result
+            )
+            == "made"
+        )
+
+        session_name = (
+            getattr(
+                selected_session,
+                "session_name",
+                None,
+            )
+            or f"Session {session_id}"
+        )
+
+        return build_branded_fallback_pdf(
+            title="Practice Session Report",
+            subtitle=f"{session_name} · Hosted fallback report",
+            sections=[
+                (
+                    "Session summary",
+                    [
+                        f"Session: {session_name}",
+                        f"Tracked shots: {len(shots)}",
+                        f"Made shots: {made_count}",
+                        f"Missed shots: {max(0, len(shots) - made_count)}",
+                    ],
+                ),
+                (
+                    "Report status",
+                    [
+                        (
+                            "The full biomechanics-based session report could "
+                            "not use one optional research dependency."
+                        ),
+                        (
+                            "The shot files and session database remain intact "
+                            "and available for review."
+                        ),
+                        f"Technical detail: {type(error).__name__}: {error}",
+                    ],
+                ),
+            ],
+            filename=(
+                f"session_{session_id}_report.pdf"
+            ),
+        )
 
 
 
@@ -15197,9 +15692,6 @@ def render_session_analysis_workspace() -> None:
 
 
 
-@st.cache_data(
-    show_spinner=False,
-)
 def generate_player_development_pdf_bytes(
     player_id: int,
     participant_id: str,
@@ -15218,19 +15710,77 @@ def generate_player_development_pdf_bytes(
         database_file=history_repository.database_file
     )
 
-    generator = PlayerDevelopmentPDFReportGenerator()
-
-    pdf_path = generator.run(
-        player_id=player_id,
-        participant_id=participant_id,
-        player_display_name=player_display_name,
-        timeline_engine=timeline_engine,
+    generator = PlayerDevelopmentPDFReportGenerator(
+        output_folder=hosted_report_output_folder(
+            "player_development"
+        )
     )
 
-    return (
-        pdf_path.read_bytes(),
-        pdf_path.name,
-    )
+    try:
+        pdf_path = generator.run(
+            player_id=player_id,
+            participant_id=participant_id,
+            player_display_name=player_display_name,
+            timeline_engine=timeline_engine,
+        )
+
+        return (
+            pdf_path.read_bytes(),
+            pdf_path.name,
+        )
+
+    except Exception as error:
+        session_repository = get_practice_session_repository()
+
+        sessions = session_repository.list_sessions(
+            player_id=player_id,
+            include_inactive=True,
+        )
+
+        total_shots = sum(
+            int(
+                getattr(
+                    session,
+                    "shot_count",
+                    0,
+                )
+                or 0
+            )
+            for session in sessions
+        )
+
+        return build_branded_fallback_pdf(
+            title="Player Development Report",
+            subtitle=f"{player_display_name} · Hosted fallback report",
+            sections=[
+                (
+                    "Player",
+                    [
+                        f"Player: {player_display_name}",
+                        f"Participant ID: {participant_id}",
+                        f"Sessions: {len(sessions)}",
+                        f"Assigned shots: {total_shots}",
+                    ],
+                ),
+                (
+                    "Report status",
+                    [
+                        (
+                            "The full development timeline could not use one "
+                            "optional historical research dependency."
+                        ),
+                        (
+                            "Player, session, and shot records remain available "
+                            "through the Player Development workspace."
+                        ),
+                        f"Technical detail: {type(error).__name__}: {error}",
+                    ],
+                ),
+            ],
+            filename=(
+                f"{participant_id}_player_development_report.pdf"
+            ),
+        )
 
 
 
@@ -17846,9 +18396,6 @@ def render_player_profile_workspace() -> None:
 
 
 
-@st.cache_data(
-    show_spinner=False,
-)
 def generate_session_comparison_pdf_bytes(
     first_session_id: int,
     second_session_id: int,
@@ -17861,18 +18408,97 @@ def generate_session_comparison_pdf_bytes(
         database_file=history_repository.database_file
     )
 
-    generator = SessionComparisonPDFReportGenerator()
-
-    pdf_path = generator.run(
-        first_session_id=first_session_id,
-        second_session_id=second_session_id,
-        analysis_engine=analysis_engine,
+    generator = SessionComparisonPDFReportGenerator(
+        output_folder=hosted_report_output_folder(
+            "session_comparison"
+        )
     )
 
-    return (
-        pdf_path.read_bytes(),
-        pdf_path.name,
-    )
+    try:
+        pdf_path = generator.run(
+            first_session_id=first_session_id,
+            second_session_id=second_session_id,
+            analysis_engine=analysis_engine,
+        )
+
+        return (
+            pdf_path.read_bytes(),
+            pdf_path.name,
+        )
+
+    except Exception as error:
+        session_repository = get_practice_session_repository()
+
+        sessions = all_workspace_sessions(
+            include_inactive=True
+        )
+
+        first_session = next(
+            (
+                session
+                for session in sessions
+                if session.session_id == first_session_id
+            ),
+            None,
+        )
+
+        second_session = next(
+            (
+                session
+                for session in sessions
+                if session.session_id == second_session_id
+            ),
+            None,
+        )
+
+        first_name = (
+            getattr(
+                first_session,
+                "session_name",
+                None,
+            )
+            or f"Session {first_session_id}"
+        )
+
+        second_name = (
+            getattr(
+                second_session,
+                "session_name",
+                None,
+            )
+            or f"Session {second_session_id}"
+        )
+
+        return build_branded_fallback_pdf(
+            title="Session Comparison Report",
+            subtitle=f"{first_name} vs {second_name}",
+            sections=[
+                (
+                    "Comparison",
+                    [
+                        f"First session: {first_name}",
+                        f"Second session: {second_name}",
+                    ],
+                ),
+                (
+                    "Report status",
+                    [
+                        (
+                            "The complete biomechanics comparison could not use "
+                            "one optional research dependency."
+                        ),
+                        (
+                            "Both sessions remain available for database-backed "
+                            "review in Session Comparison."
+                        ),
+                        f"Technical detail: {type(error).__name__}: {error}",
+                    ],
+                ),
+            ],
+            filename=(
+                f"session_{first_session_id}_vs_{second_session_id}.pdf"
+            ),
+        )
 
 
 def render_session_comparison_workspace() -> None:
@@ -19488,7 +20114,7 @@ def main() -> None:
 <span class="bms-status-dot"></span>
 <span>Platform operational</span>
 </div>
-<div class="bms-app-status-right">Page: {workspace} · {'Blank Workspace' if active_workspace_kind() == 'blank' else ('Executive Demo Workspace' if active_workspace_kind() == 'executive_demo' else 'Local Coaching Workspace')} · Version 1.0 full platform</div>
+<div class="bms-app-status-right">Page: {workspace} · {'Blank Workspace Mode' if active_workspace_kind() == 'blank' else ('Demo Mode' if active_workspace_kind() == 'executive_demo' else 'Local Coaching Workspace')} · Version 1.0 full platform</div>
 </div>""",
         unsafe_allow_html=True,
     )
@@ -19762,7 +20388,7 @@ def main() -> None:
                 workspace_label = (
                     "Blank Workspace"
                     if active_workspace_kind() == "blank"
-                    else "Executive Demo"
+                    else "Demo Mode"
                 )
 
                 st.markdown(
@@ -19774,7 +20400,7 @@ def main() -> None:
                 )
 
                 if st.button(
-                    "Choose Different Workspace",
+                    "Choose Different Mode",
                     use_container_width=True,
                     key="sidebar_reset_public_workspace",
                 ):
