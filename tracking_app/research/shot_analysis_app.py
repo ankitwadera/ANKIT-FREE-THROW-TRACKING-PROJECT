@@ -251,47 +251,78 @@ def initialize_public_workspace(
         workspace_root
     )
 
+    # Both application modes begin on Home. Demo Mode is distinguished by its
+    # populated data workspace, not by forcing the user onto a special page.
     st.session_state[
         "private_workspace"
-    ] = (
-        "Executive Demo"
-        if workspace_kind == "executive_demo"
-        else "Home"
-    )
+    ] = "Home"
 
     st.session_state[
         "pending_workspace_navigation"
     ] = None
 
 
-def reset_public_workspace() -> None:
+def switch_public_workspace_mode() -> None:
     """
-    Delete the temporary visitor workspace and return to the two-mode chooser.
+    Switch between the two hosted application modes.
 
-    This function is used as a Streamlit button callback. Callbacks execute
-    before the next top-to-bottom script run, which makes it safe to clear the
-    Navigation widget state.
+    Toggle OFF creates a new empty Blank Workspace Mode.
+    Toggle ON creates a new populated Demo Mode.
+
+    This function is a Streamlit widget callback, so it runs before the next
+    top-to-bottom render and can safely clear Navigation widget state.
     """
 
     import streamlit as st
 
-    workspace_root = st.session_state.get(
+    demo_mode_enabled = bool(
+        st.session_state.get(
+            "public_mode_toggle",
+            False,
+        )
+    )
+
+    requested_kind = (
+        "executive_demo"
+        if demo_mode_enabled
+        else "blank"
+    )
+
+    current_kind = str(
+        st.session_state.get(
+            "public_workspace_kind",
+            "",
+        )
+    )
+
+    current_root = st.session_state.get(
         "public_workspace_data_root"
     )
 
-    if workspace_root:
+    if (
+        current_kind == requested_kind
+        and current_root
+        and Path(
+            current_root
+        ).exists()
+    ):
+        return
+
+    previous_root = current_root
+
+    if previous_root:
         shutil.rmtree(
-            workspace_root,
+            previous_root,
             ignore_errors=True,
         )
 
     st.cache_data.clear()
     st.cache_resource.clear()
 
-    # Clear every temporary widget and workflow value, including the
-    # private_workspace Navigation widget key. Do not assign a new value here;
-    # initialize_session_state() will recreate the default only after the user
-    # chooses one of the two modes.
+    # Keep only the toggle value. All page, uploader, repository, analysis,
+    # navigation, and report state belongs to the old mode and must be rebuilt.
+    toggle_value = demo_mode_enabled
+
     for key in list(
         st.session_state.keys()
     ):
@@ -300,133 +331,44 @@ def reset_public_workspace() -> None:
             None,
         )
 
+    st.session_state[
+        "public_mode_toggle"
+    ] = toggle_value
 
-def render_public_workspace_chooser() -> None:
+    initialize_public_workspace(
+        requested_kind
+    )
+
+
+def ensure_public_workspace_mode() -> None:
     """
-    Render the hosted landing page with exactly two application modes.
+    Create the selected hosted mode on first load without showing a chooser.
     """
 
-    import streamlit as st
+    if not is_hosted_portfolio_mode():
+        return
 
-    st.markdown(
-        """
-        <div class="bms-hero">
-            <div class="bms-kicker">
-                Basketball biomechanics and player-development platform
-            </div>
-            <h1>ANKIT'S FREE THROW ANALYSIS SOFTWARE</h1>
-            <p>
-                Analyze structured three-dimensional free-throw tracking data,
-                organize practice sessions, compare attempts, and translate
-                movement evidence into coach-readable development information.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    section_title(
-        "Choose how to begin",
-        (
-            "Start with an empty workspace for your own compatible tracking "
-            "files, or enter the populated Demo Mode."
-        ),
-    )
-
-    blank_column, demo_column = st.columns(
-        2,
-        gap="large",
-    )
-
-    with blank_column:
-        st.markdown(
-            """
-            <div class="bms-score-card" style="min-height:24rem;">
-                <div class="bms-kicker" style="color:#c94d18;">
-                    Your own data
-                </div>
-                <h2 style="margin:0 0 0.7rem;color:#152033;">
-                    Blank Workspace
-                </h2>
-                <p style="color:#455066;line-height:1.65;">
-                    Begin with no players, teams, sessions, or shot files.
-                    Create your own structure and upload compatible free-throw
-                    tracking data.
-                </p>
-                <div class="bms-footer-note" style="margin-top:1rem;">
-                    <strong>Accepted uploads:</strong><br>
-                    JSON files containing structured 3D basketball free-throw
-                    tracking data. Each file should contain one attempt,
-                    frame-by-frame tracking, ball XYZ coordinates, player body
-                    keypoints, participant ID, trial ID, and made/missed result.
-                    <br><br>
-                    MP4 video, CSV, Excel, box-score JSON, play-by-play JSON,
-                    shot charts, photos, and unrelated JSON are not compatible.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+    if (
+        active_workspace_kind()
+        and st.session_state.get(
+            "public_workspace_data_root"
         )
+    ):
+        return
 
-        if st.button(
-            "Start Blank Workspace Mode Mode",
-            type="primary",
-            use_container_width=True,
-            key="start_blank_public_workspace",
-        ):
-            initialize_public_workspace(
-                "blank"
+    requested_kind = (
+        "executive_demo"
+        if bool(
+            st.session_state.get(
+                "public_mode_toggle",
+                False,
             )
-            st.rerun()
-
-    with demo_column:
-        st.markdown(
-            """
-            <div class="bms-score-card" style="min-height:24rem;">
-                <div class="bms-kicker" style="color:#c94d18;">
-                    Portfolio demonstration
-                </div>
-                <h2 style="margin:0 0 0.7rem;color:#152033;">
-                    Executive Demo
-                </h2>
-                <p style="color:#455066;line-height:1.65;">
-                    Load a populated front-office example with organizations,
-                    teams, players, sessions, shot files, development timelines,
-                    dashboards, comparisons, and professional reports.
-                </p>
-                <div class="bms-footer-note" style="margin-top:1rem;">
-                    Demo Mode is copied into a private temporary workspace for
-                    this visitor. You can explore and edit that copy without
-                    changing the packaged demonstration or another visitor's
-                    workspace.
-                    <br><br>
-                    Named players are portfolio labels. The underlying tracking
-                    evidence originates from SPL Open Data and is not represented
-                    as tracking collected from those named athletes.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
         )
+        else "blank"
+    )
 
-        if st.button(
-            "Enter Demo Mode",
-            type="primary",
-            use_container_width=True,
-            key="load_executive_demo_workspace",
-        ):
-            initialize_public_workspace(
-                "executive_demo"
-            )
-            st.rerun()
-
-    st.markdown(
-        """
-        <div class="bms-footer">
-            Created by Ankit Wadera · ankitwadera2@gmail.com
-        </div>
-        """,
-        unsafe_allow_html=True,
+    initialize_public_workspace(
+        requested_kind
     )
 
 
@@ -19825,6 +19767,14 @@ def initialize_session_state() -> None:
 
     if (
         is_hosted_portfolio_mode()
+        and "public_mode_toggle"
+        not in st.session_state
+    ):
+        # OFF = Blank Workspace Mode. ON = Demo Mode.
+        st.session_state.public_mode_toggle = False
+
+    if (
+        is_hosted_portfolio_mode()
         and "public_workspace_kind"
         not in st.session_state
     ):
@@ -20061,12 +20011,7 @@ def main() -> None:
     initialize_session_state()
     initialize_playback_state()
 
-    if (
-        is_hosted_portfolio_mode()
-        and not active_workspace_kind()
-    ):
-        render_public_workspace_chooser()
-        return
+    ensure_public_workspace_mode()
 
     pending_workspace = st.session_state.pop(
         "pending_workspace_navigation",
@@ -20298,6 +20243,38 @@ def main() -> None:
                 "Start",
             )
 
+            if is_hosted_portfolio_mode():
+                st.markdown(
+                    '<div class="bms-nav-heading">Application mode</div>',
+                    unsafe_allow_html=True,
+                )
+
+                st.toggle(
+                    "Demo Mode",
+                    key="public_mode_toggle",
+                    help=(
+                        "OFF: Blank Workspace Mode with no data. "
+                        "ON: Demo Mode with the populated portfolio dataset."
+                    ),
+                    on_change=switch_public_workspace_mode,
+                )
+
+                active_mode_label = (
+                    "Demo Mode · populated data"
+                    if active_workspace_kind() == "executive_demo"
+                    else "Blank Workspace Mode · no data"
+                )
+
+                st.markdown(
+                    (
+                        '<div class="bms-current-location">'
+                        '<small>Active mode</small>'
+                        f'<strong>{active_mode_label}</strong>'
+                        '</div>'
+                    ),
+                    unsafe_allow_html=True,
+                )
+
             st.markdown(
                 '<div class="bms-nav-heading">Navigation section</div>',
                 unsafe_allow_html=True,
@@ -20363,28 +20340,6 @@ def main() -> None:
             )
 
 
-
-            if is_hosted_portfolio_mode():
-                workspace_label = (
-                    "Blank Workspace"
-                    if active_workspace_kind() == "blank"
-                    else "Demo Mode"
-                )
-
-                st.markdown(
-                    f"""<div class="bms-sidebar-card">
-<strong>Active data workspace</strong>
-<p>{workspace_label}<br>Data is isolated to this visitor and temporary.</p>
-</div>""",
-                    unsafe_allow_html=True,
-                )
-
-                st.button(
-                    "Choose Different Mode",
-                    use_container_width=True,
-                    key="sidebar_reset_public_workspace",
-                    on_click=reset_public_workspace,
-                )
 
             quick_left, quick_right = st.columns(2)
 
