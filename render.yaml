@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: ankit-free-throw-analysis
+    runtime: docker
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: APP_MODE
+        value: public
+      - key: ANKIT_APP_DATA_ROOT
+        value: deployment_data
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: MPLBACKEND
+        value: Agg
+      - key: PYVISTA_OFF_SCREEN
+        value: "true"

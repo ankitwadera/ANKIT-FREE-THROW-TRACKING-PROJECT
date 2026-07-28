@@ -24,7 +24,8 @@ __pycache__/
 Thumbs.db
 desktop.ini
 
-# Local databases and database journals
+# Private local databases and journals
+data/
 *.db
 *.sqlite
 *.sqlite3
@@ -32,40 +33,40 @@ desktop.ini
 *.sqlite-wal
 *.sqlite-shm
 
-# Private backups
+# Private backups and generated outputs
 backups/
-*.bak
-*.backup
-
-# Locally stored uploaded files
-data/player_history_files/
-
-# Generated outputs and reports
 outputs/
 generated_reports/
 temp/
 tmp/
-*.pdf
-*.png
-
-# Logs
+*.bak
+*.backup
 *.log
+*.pdf
+
+# Local full SPL dataset
+SPL-Open-Data-main/
 
 # Build artifacts
 build/
 dist/
 *.egg-info/
-
-# Streamlit and test caches
-.streamlit/cache/
 .coverage
 htmlcov/
 
-# Local dataset source
-SPL-Open-Data-main/
-
-# Temporary media
-*.mp4
+# Development-only media
+first_skeleton.png
+first_skeleton_fixed.png
 *.avi
 *.mov
-*.gif
+
+# IMPORTANT: publish the curated portfolio demo package.
+!deployment_data/
+!deployment_data/player_history.sqlite3
+!deployment_data/player_history_files/
+!deployment_data/player_history_files/**/*.json
+
+# Keep official application branding PNG files.
+!assets/
+!assets/brand/
+!assets/brand/*.png

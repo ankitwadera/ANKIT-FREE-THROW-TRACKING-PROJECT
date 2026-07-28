@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import os
+import shutil
 import tempfile
 import zipfile
 import hashlib
@@ -91,6 +92,334 @@ from tracking_app.whole_body_synchronization import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+
+def resolve_app_data_root() -> Path:
+    """
+    Resolve the normal persistent local application data directory.
+    """
+
+    configured_value = os.getenv(
+        "ANKIT_APP_DATA_ROOT",
+        "data",
+    ).strip()
+
+    configured_path = Path(
+        configured_value
+    ).expanduser()
+
+    if not configured_path.is_absolute():
+        configured_path = (
+            PROJECT_ROOT
+            / configured_path
+        )
+
+    return configured_path.resolve()
+
+
+DEFAULT_APP_DATA_ROOT = resolve_app_data_root()
+
+PACKAGED_EXECUTIVE_DEMO_ROOT = (
+    PROJECT_ROOT
+    / "deployment_data"
+)
+
+
+def is_hosted_portfolio_mode() -> bool:
+    """
+    Return True when the application is running as the public portfolio site.
+    """
+
+    app_mode = os.getenv(
+        "APP_MODE",
+        "private",
+    ).strip().lower()
+
+    return app_mode in {
+        "public",
+        "portfolio",
+        "hosted",
+    }
+
+
+def active_workspace_kind() -> str:
+    """
+    Return blank, executive_demo, or local.
+    """
+
+    if not is_hosted_portfolio_mode():
+        return "local"
+
+    return str(
+        st.session_state.get(
+            "public_workspace_kind",
+            "",
+        )
+    ).strip()
+
+
+def active_data_root() -> Path:
+    """
+    Return the data directory for the current browser session.
+
+    Hosted visitors receive an isolated temporary copy. Local users continue
+    using the normal persistent data directory.
+    """
+
+    if not is_hosted_portfolio_mode():
+        return DEFAULT_APP_DATA_ROOT
+
+    workspace_path = st.session_state.get(
+        "public_workspace_data_root"
+    )
+
+    if not workspace_path:
+        raise RuntimeError(
+            "Choose Blank Workspace or Executive Demo before opening the platform."
+        )
+
+    return Path(
+        workspace_path
+    )
+
+
+def initialize_public_workspace(
+    workspace_kind: str,
+) -> None:
+    """
+    Create an isolated temporary workspace for one hosted visitor.
+    """
+
+    if workspace_kind not in {
+        "blank",
+        "executive_demo",
+    }:
+        raise ValueError(
+            f"Unsupported workspace kind: {workspace_kind}"
+        )
+
+    previous_root = st.session_state.get(
+        "public_workspace_data_root"
+    )
+
+    if previous_root:
+        shutil.rmtree(
+            previous_root,
+            ignore_errors=True,
+        )
+
+    workspace_root = Path(
+        tempfile.mkdtemp(
+            prefix=(
+                "ankit_blank_"
+                if workspace_kind == "blank"
+                else "ankit_executive_demo_"
+            )
+        )
+    )
+
+    if workspace_kind == "executive_demo":
+        if not PACKAGED_EXECUTIVE_DEMO_ROOT.exists():
+            raise FileNotFoundError(
+                (
+                    "The packaged Executive Demo was not found at "
+                    f"{PACKAGED_EXECUTIVE_DEMO_ROOT}."
+                )
+            )
+
+        shutil.copytree(
+            PACKAGED_EXECUTIVE_DEMO_ROOT,
+            workspace_root,
+            dirs_exist_ok=True,
+        )
+
+    (
+        workspace_root
+        / "player_history_files"
+    ).mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    st.session_state[
+        "public_workspace_kind"
+    ] = workspace_kind
+
+    st.session_state[
+        "public_workspace_data_root"
+    ] = str(
+        workspace_root
+    )
+
+    st.session_state[
+        "private_workspace"
+    ] = (
+        "Executive Demo"
+        if workspace_kind == "executive_demo"
+        else "Home"
+    )
+
+    st.session_state[
+        "pending_workspace_navigation"
+    ] = None
+
+
+def reset_public_workspace() -> None:
+    """
+    Delete the visitor's temporary workspace and return to the chooser.
+    """
+
+    workspace_root = st.session_state.get(
+        "public_workspace_data_root"
+    )
+
+    if workspace_root:
+        shutil.rmtree(
+            workspace_root,
+            ignore_errors=True,
+        )
+
+    st.session_state.pop(
+        "public_workspace_data_root",
+        None,
+    )
+
+    st.session_state.pop(
+        "public_workspace_kind",
+        None,
+    )
+
+    st.session_state[
+        "private_workspace"
+    ] = "Home"
+
+
+def render_public_workspace_chooser() -> None:
+    """
+    Render the hosted landing page before a workspace is initialized.
+    """
+
+    st.markdown(
+        """
+        <div class="bms-hero">
+            <div class="bms-kicker">
+                Basketball biomechanics and player-development platform
+            </div>
+            <h1>ANKIT'S FREE THROW ANALYSIS SOFTWARE</h1>
+            <p>
+                Analyze structured three-dimensional free-throw tracking data,
+                organize practice sessions, compare attempts, and translate
+                movement evidence into coach-readable development information.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    section_title(
+        "Choose how to begin",
+        (
+            "Start with an empty workspace for your own compatible tracking "
+            "files, or load the populated Executive Demo."
+        ),
+    )
+
+    blank_column, demo_column = st.columns(
+        2,
+        gap="large",
+    )
+
+    with blank_column:
+        st.markdown(
+            """
+            <div class="bms-score-card" style="min-height:24rem;">
+                <div class="bms-kicker" style="color:#c94d18;">
+                    Your own data
+                </div>
+                <h2 style="margin:0 0 0.7rem;color:#152033;">
+                    Blank Workspace
+                </h2>
+                <p style="color:#455066;line-height:1.65;">
+                    Begin with no players, teams, sessions, or shot files.
+                    Create your own structure and upload compatible free-throw
+                    tracking data.
+                </p>
+                <div class="bms-footer-note" style="margin-top:1rem;">
+                    <strong>Accepted uploads:</strong><br>
+                    JSON files containing structured 3D basketball free-throw
+                    tracking data. Each file should contain one attempt,
+                    frame-by-frame tracking, ball XYZ coordinates, player body
+                    keypoints, participant ID, trial ID, and made/missed result.
+                    <br><br>
+                    MP4 video, CSV, Excel, box-score JSON, play-by-play JSON,
+                    shot charts, photos, and unrelated JSON are not compatible.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if st.button(
+            "Start Blank Workspace",
+            type="primary",
+            use_container_width=True,
+            key="start_blank_public_workspace",
+        ):
+            initialize_public_workspace(
+                "blank"
+            )
+            st.rerun()
+
+    with demo_column:
+        st.markdown(
+            """
+            <div class="bms-score-card" style="min-height:24rem;">
+                <div class="bms-kicker" style="color:#c94d18;">
+                    Portfolio demonstration
+                </div>
+                <h2 style="margin:0 0 0.7rem;color:#152033;">
+                    Executive Demo
+                </h2>
+                <p style="color:#455066;line-height:1.65;">
+                    Load a populated front-office example with organizations,
+                    teams, players, sessions, shot files, development timelines,
+                    dashboards, comparisons, and professional reports.
+                </p>
+                <div class="bms-footer-note" style="margin-top:1rem;">
+                    The demo is copied into a private temporary workspace for
+                    this visitor. You can explore and edit that copy without
+                    changing the packaged demonstration or another visitor's
+                    workspace.
+                    <br><br>
+                    Named players are portfolio labels. The underlying tracking
+                    evidence originates from SPL Open Data and is not represented
+                    as tracking collected from those named athletes.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if st.button(
+            "Load Executive Demo",
+            type="primary",
+            use_container_width=True,
+            key="load_executive_demo_workspace",
+        ):
+            initialize_public_workspace(
+                "executive_demo"
+            )
+            st.rerun()
+
+    st.markdown(
+        """
+        <div class="bms-footer">
+            Created by Ankit Wadera · ankitwadera2@gmail.com
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 MASTER_FEATURE_FILE = (
     PROJECT_ROOT
     / "outputs"
@@ -108,14 +437,13 @@ PERSONAL_DIAGNOSTIC_FILE = (
 
 def is_true_public_mode() -> bool:
     """
-    The application now uses one unified full-feature mode.
+    Compatibility alias for hosted portfolio mode.
 
-    This compatibility helper intentionally returns False so older public-mode
-    guards cannot hide roster, organization, session, player-development, team,
-    reporting, or analysis tools.
+    Hosted workspaces are isolated and temporary, so visitors may use the
+    complete creation, upload, session, roster, and analysis workflows.
     """
 
-    return False
+    return is_hosted_portfolio_mode()
 
 
 def render_breadcrumbs(
@@ -907,19 +1235,19 @@ def safe_result(value: object) -> str:
 def validate_uploaded_json(data: object) -> dict:
     if not isinstance(data, dict):
         raise ValueError(
-            "The uploaded JSON must contain one trial object."
+            "This is not a compatible free-throw tracking JSON. The file must " "contain one free-throw trial object."
         )
 
     tracking = data.get("tracking")
 
     if not isinstance(tracking, list):
         raise ValueError(
-            "The JSON does not contain a valid tracking list."
+            "This is not a compatible free-throw tracking JSON. A non-empty " "tracking list with ball coordinates and player body keypoints is required."
         )
 
     if len(tracking) == 0:
         raise ValueError(
-            "The tracking list is empty."
+            "This is not a compatible free-throw tracking JSON. The tracking " "list is empty."
         )
 
     return data
@@ -1889,6 +2217,54 @@ def score_ring_html(
         </div>
     </div>
     """
+
+
+
+def render_empty_state(
+    title: str,
+    message: str,
+    guidance: str | None = None,
+) -> None:
+    """
+    Render a consistent empty-state or read-only notice.
+
+    This helper is used by public portfolio mode when database-changing
+    management workflows are intentionally unavailable.
+    """
+
+    guidance_html = (
+        ""
+        if not guidance
+        else (
+            '<div class="bms-footer-note" '
+            'style="margin-top:0.65rem;">'
+            f"{guidance}"
+            "</div>"
+        )
+    )
+
+    st.markdown(
+        f"""
+        <div class="bms-empty-state">
+            <div style="
+                color:#152033;
+                font-size:1.05rem;
+                font-weight:800;
+                margin-bottom:0.35rem;
+            ">
+                {title}
+            </div>
+            <div style="
+                color:#667085;
+                line-height:1.55;
+            ">
+                {message}
+            </div>
+            {guidance_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def section_title(
@@ -7242,13 +7618,37 @@ def render_player_development_dashboard(
 
 
 
-@st.cache_resource
 def get_player_history_repository() -> PlayerHistoryRepository:
     """
-    Create one persistent repository connection layer for the app.
+    Create a repository using the active local or visitor workspace.
     """
 
-    return PlayerHistoryRepository()
+    data_root = active_data_root()
+
+    database_file = (
+        data_root
+        / "player_history.sqlite3"
+    )
+
+    storage_folder = (
+        data_root
+        / "player_history_files"
+    )
+
+    data_root.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    storage_folder.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    return PlayerHistoryRepository(
+        database_file=database_file,
+        storage_folder=storage_folder,
+    )
 
 
 def player_option_label(
@@ -7575,6 +7975,18 @@ def render_player_history_manager() -> None:
                         "will be rejected."
                     )
                 )
+
+            st.info(
+                (
+                    "Upload one or more JSON files containing structured 3D "
+                    "basketball free-throw tracking data. Each file should "
+                    "represent one attempt and include a non-empty tracking "
+                    "list, ball XYZ coordinates, player body keypoints, "
+                    "participant ID, trial ID, and made/missed result. MP4, "
+                    "CSV, Excel, box-score JSON, play-by-play JSON, shot-chart "
+                    "files, and unrelated JSON are not compatible."
+                )
+            )
 
             uploaded_history_files = st.file_uploader(
                 "Upload one or many shot JSON files",
@@ -8075,18 +8487,6 @@ def session_shot_option_label(
 
 
 def render_practice_session_manager() -> None:
-    if is_true_public_mode():
-        render_empty_state(
-            "Session management is hidden in Public Mode",
-            (
-                "Uploads, deletions, shot assignments, and session editing are "
-                "available only in the private local workspace."
-            ),
-            "Restart without APP_MODE=public to manage sessions and shots.",
-        )
-
-        return
-
     """
     Create, edit, and organize player practice sessions.
     """
@@ -8811,18 +9211,6 @@ def roster_option_label(
 
 
 def render_organization_team_manager() -> None:
-    if is_true_public_mode():
-        render_empty_state(
-            "Management is hidden in Public Mode",
-            (
-                "Organization, team, and roster editing is available only in "
-                "the private local workspace."
-            ),
-            "Restart without APP_MODE=public to manage organizations and rosters.",
-        )
-
-        return
-
     """
     Manage organizations, teams, and team rosters.
     """
@@ -10233,7 +10621,7 @@ def render_team_dashboard() -> None:
     if team_quick_middle.button(
         "Manage Roster",
         use_container_width=True,
-        disabled=is_true_public_mode(),
+        disabled=False,
         key="team_dashboard_manage_roster",
     ):
         request_workspace_navigation(
@@ -18170,8 +18558,19 @@ def initialize_session_state() -> None:
     if "pending_workspace_navigation" not in st.session_state:
         st.session_state.pending_workspace_navigation = None
 
-    if "showcase_demo_mode" not in st.session_state:
-        st.session_state.showcase_demo_mode = False
+    if (
+        is_hosted_portfolio_mode()
+        and "public_workspace_kind"
+        not in st.session_state
+    ):
+        st.session_state.public_workspace_kind = ""
+
+    if (
+        is_hosted_portfolio_mode()
+        and "public_workspace_data_root"
+        not in st.session_state
+    ):
+        st.session_state.public_workspace_data_root = None
 
     if "launch_readiness_checks" not in st.session_state:
         st.session_state.launch_readiness_checks = None
@@ -18338,44 +18737,23 @@ def clear_stale_result(
 
 def application_mode() -> str:
     """
-    Return the active application mode.
-
-    Legacy compatibility function.
-
-    Version 1 now uses one unified full-feature application mode. Environment
-    variables no longer hide management or development workspaces.
+    Return the configured application mode for compatibility.
     """
 
-    secret_mode = None
-
-    try:
-        secret_mode = st.secrets.get(
-            "APP_MODE"
-        )
-
-    except Exception:
-        secret_mode = None
-
-    configured_mode = (
-        secret_mode
-        or os.getenv(
-            "APP_MODE",
-            "private",
-        )
+    return (
+        "public"
+        if is_true_public_mode()
+        else "private"
     )
-
-    normalized_mode = str(
-        configured_mode
-    ).strip().lower()
-
-    return "private"
 
 
 def is_public_mode() -> bool:
     """
-    The Version 1 application has one unified full-feature interface.
+    Legacy presentation-mode helper.
 
-    Kept only for backward compatibility with older code paths.
+    This intentionally remains False so the unified full navigation and all
+    analysis workspaces stay visible. Database-changing actions use
+    is_true_public_mode() for read-only protection.
     """
 
     return False
@@ -18418,6 +18796,13 @@ def main() -> None:
     initialize_session_state()
     initialize_playback_state()
 
+    if (
+        is_hosted_portfolio_mode()
+        and not active_workspace_kind()
+    ):
+        render_public_workspace_chooser()
+        return
+
     pending_workspace = st.session_state.pop(
         "pending_workspace_navigation",
         None,
@@ -18433,13 +18818,9 @@ def main() -> None:
         or is_true_public_mode()
     )
 
-    workspace = (
-        "Executive Demo"
-        if public_mode
-        else st.session_state.get(
-            "private_workspace",
-            "Home",
-        )
+    workspace = st.session_state.get(
+        "private_workspace",
+        "Home",
     )
 
     st.markdown(
@@ -18448,18 +18829,12 @@ def main() -> None:
 <span class="bms-status-dot"></span>
 <span>Platform operational</span>
 </div>
-<div class="bms-app-status-right">Workspace: {workspace} · {'Presentation Mode' if st.session_state.get('showcase_demo_mode') else 'Private Workspace'} · Version 1.0 full platform</div>
+<div class="bms-app-status-right">Page: {workspace} · {'Blank Workspace' if active_workspace_kind() == 'blank' else ('Executive Demo Workspace' if active_workspace_kind() == 'executive_demo' else 'Local Coaching Workspace')} · Version 1.0 full platform</div>
 </div>""",
         unsafe_allow_html=True,
     )
 
-    if public_mode:
-        st.info(
-            (
-                "Public Mode is active. Management and editing workflows are "
-                "hidden, and the application is operating as a read-only showcase."
-            )
-        )
+
 
     render_breadcrumbs(
         workspace
@@ -18573,7 +18948,15 @@ def main() -> None:
             )
         )
 
-        if not is_public_mode():
+        st.caption(
+            (
+                "Public demo data"
+                if is_true_public_mode()
+                else "Local coaching data"
+            )
+        )
+
+        if True:
             st.markdown(
                 "---"
             )
@@ -18709,22 +19092,35 @@ def main() -> None:
             st.markdown(
                 """<div class="bms-sidebar-card">
 <strong>Recommended demonstration</strong>
-<p>Use Executive Demo for a guided front-office overview. Use Global Search for fast navigation.</p>
+<p>Use Executive Demo for a front-office overview. Use Global Search for fast navigation.</p>
 </div>""",
                 unsafe_allow_html=True,
             )
 
-            showcase_enabled = st.toggle(
-                "Presentation Mode",
-                value=st.session_state.showcase_demo_mode,
-                key="sidebar_showcase_toggle",
-                help=(
-                    "Optimizes the interface for a public demonstration. "
-                    "No player, shot, session, or team data is changed."
-                ),
-            )
 
-            st.session_state.showcase_demo_mode = showcase_enabled
+
+            if is_hosted_portfolio_mode():
+                workspace_label = (
+                    "Blank Workspace"
+                    if active_workspace_kind() == "blank"
+                    else "Executive Demo"
+                )
+
+                st.markdown(
+                    f"""<div class="bms-sidebar-card">
+<strong>Active data workspace</strong>
+<p>{workspace_label}<br>Data is isolated to this visitor and temporary.</p>
+</div>""",
+                    unsafe_allow_html=True,
+                )
+
+                if st.button(
+                    "Choose Different Workspace",
+                    use_container_width=True,
+                    key="sidebar_reset_public_workspace",
+                ):
+                    reset_public_workspace()
+                    st.rerun()
 
             quick_left, quick_right = st.columns(2)
 
@@ -18831,7 +19227,7 @@ def main() -> None:
             )
 
             comparison_upload = st.file_uploader(
-                "Upload a comparison JSON",
+                "Upload a Comparison Free-Throw Tracking JSON",
                 type=[
                     "json",
                 ],
@@ -18930,7 +19326,7 @@ def main() -> None:
 
             demo_left.markdown(
                 """<div class="bms-showcase-banner">
-<div class="bms-showcase-eyebrow">Guided front-office demonstration</div>
+<div class="bms-showcase-eyebrow">Executive front-office demonstration</div>
 <h2>See the complete player-development workflow in minutes</h2>
 <p class="bms-showcase-copy">Move from a tracked free throw to smooth playback, biomechanics, coach interpretation, practice-session grading, long-term development, team intelligence, and professional PDF reporting.</p>
 <div class="bms-feature-pill-row">
@@ -18952,18 +19348,17 @@ def main() -> None:
 
                 st.caption(
                     (
-                        "Launch a guided front-office overview using "
+                        "Launch a front-office overview using "
                         "the data already stored in the platform."
                     )
                 )
 
                 if st.button(
-                    "Start Guided Demo",
+                    "Open Executive Demo",
                     type="primary",
                     use_container_width=True,
                     key="home_start_guided_demo",
                 ):
-                    st.session_state.showcase_demo_mode = True
                     request_workspace_navigation(
                         "Executive Demo"
                     )
@@ -18996,7 +19391,7 @@ def main() -> None:
                 ),
                 (
                     "Executive Demo",
-                    "Open a guided front-office overview using existing data.",
+                    "Open a front-office overview using existing data.",
                 ),
                 (
                     "Player Profile",
@@ -19079,7 +19474,7 @@ def main() -> None:
         if workspace == "Executive Demo":
             section_title(
                 "Executive Demo",
-                "A guided front-office overview of session analysis, player development, team intelligence, and reporting.",
+                "A front-office overview of session analysis, player development, team intelligence, and reporting.",
             )
 
             render_executive_demo_workspace()

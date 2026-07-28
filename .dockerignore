@@ -1,0 +1,47 @@
+# Git and editor metadata
+.git
+.gitignore
+.vscode
+.idea
+
+# Python environments and caches
+.venv
+venv
+env
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Local full dataset and private data
+SPL-Open-Data-main
+data
+backups
+outputs
+generated_reports
+temp
+tmp
+
+# Local secrets
+.env
+.env.*
+.streamlit/secrets.toml
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Development-only images and media
+first_skeleton.png
+first_skeleton_fixed.png
+*.avi
+*.mov
+
+# Keep these deployment assets in the image:
+# deployment_data/
+# assets/
+# .streamlit/config.toml
