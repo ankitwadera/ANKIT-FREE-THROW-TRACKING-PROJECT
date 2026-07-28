@@ -1348,12 +1348,27 @@ def analyze_uploaded_trial(
         feature_record
     )
 
-    master_records = load_csv(
-        MASTER_FEATURE_FILE
+    # Historical baseline files are optional in a new Blank Workspace.
+    #
+    # When they are present, the uploaded shot can be compared with the
+    # participant's successful historical pattern. When they are absent,
+    # objective biomechanics, shot events, playback, timelines, metrics,
+    # and downloads still run normally; only personal-baseline scoring is
+    # unavailable.
+    master_records = (
+        load_csv(
+            MASTER_FEATURE_FILE
+        )
+        if MASTER_FEATURE_FILE.exists()
+        else []
     )
 
-    diagnostic_records = load_csv(
-        PERSONAL_DIAGNOSTIC_FILE
+    diagnostic_records = (
+        load_csv(
+            PERSONAL_DIAGNOSTIC_FILE
+        )
+        if PERSONAL_DIAGNOSTIC_FILE.exists()
+        else []
     )
 
     participant_id = feature_record.participant_id
@@ -2095,8 +2110,11 @@ def build_text_report(
                 "PERSONAL SCORE",
                 "-" * 72,
                 (
-                    "No personal baseline score was available for this "
-                    "participant."
+                    "No personal successful-shot baseline is available for "
+                    "this participant yet. Objective biomechanics and shot "
+                    "event analysis are still included. Import additional "
+                    "compatible free-throw tracking JSON files to build a "
+                    "personal history."
                 ),
             ]
         )
