@@ -476,7 +476,7 @@ def configure_page() -> None:
         page_title="Ankit's Free Throw Analysis Software",
         page_icon="🏀",
         layout="wide",
-        initial_sidebar_state="expanded",
+        initial_sidebar_state="auto",
     )
 
     st.markdown(
@@ -801,25 +801,34 @@ def configure_page() -> None:
 
         [data-testid="stSidebar"] {
             border-right: 1px solid rgba(255,255,255,0.08);
-            min-width: 20rem !important;
-            width: 20rem !important;
-            transform: none !important;
-            visibility: visible !important;
         }
 
-        /* Keep the application sidebar permanently visible. */
-        [data-testid="stSidebar"][aria-expanded="false"] {
-            min-width: 20rem !important;
-            width: 20rem !important;
-            margin-left: 0 !important;
-            transform: none !important;
-            visibility: visible !important;
-        }
+        /*
+        Desktop navigation stays open for fast workflow access. On tablets and
+        phones Streamlit regains control of the sidebar drawer so visitors can
+        close it and use the full application canvas.
+        */
+        @media (min-width: 901px) {
+            [data-testid="stSidebar"] {
+                min-width: 20rem !important;
+                width: 20rem !important;
+                transform: none !important;
+                visibility: visible !important;
+            }
 
-        [data-testid="stSidebarCollapseButton"],
-        [data-testid="collapsedControl"],
-        button[data-testid="baseButton-headerNoPadding"] {
-            display: none !important;
+            [data-testid="stSidebar"][aria-expanded="false"] {
+                min-width: 20rem !important;
+                width: 20rem !important;
+                margin-left: 0 !important;
+                transform: none !important;
+                visibility: visible !important;
+            }
+
+            [data-testid="stSidebarCollapseButton"],
+            [data-testid="collapsedControl"],
+            button[data-testid="baseButton-headerNoPadding"] {
+                display: none !important;
+            }
         }
 
         [data-testid="stSidebar"] [data-testid="stRadio"] label {
@@ -1130,14 +1139,151 @@ def configure_page() -> None:
         }
 
         @media (max-width: 900px) {
+            header[data-testid="stHeader"] {
+                background: rgba(248,250,255,0.96) !important;
+                border-bottom: 1px solid var(--bms-border);
+                backdrop-filter: blur(12px);
+            }
+
+            [data-testid="stSidebar"] {
+                min-width: 0 !important;
+                width: min(22rem, calc(100vw - 2.5rem)) !important;
+                max-width: calc(100vw - 2.5rem) !important;
+                visibility: visible;
+                overflow-y: auto !important;
+                overscroll-behavior: contain;
+            }
+
+            [data-testid="stSidebar"][aria-expanded="false"] {
+                margin-left: 0 !important;
+                transform: translateX(-105%) !important;
+                visibility: hidden !important;
+            }
+
+            [data-testid="stSidebar"][aria-expanded="true"] {
+                margin-left: 0 !important;
+                transform: translateX(0) !important;
+                visibility: visible !important;
+                box-shadow: 16px 0 38px rgba(17,27,46,0.28);
+            }
+
+            [data-testid="stSidebarCollapseButton"],
+            [data-testid="collapsedControl"],
+            button[data-testid="baseButton-headerNoPadding"] {
+                display: flex !important;
+                visibility: visible !important;
+                pointer-events: auto !important;
+            }
+
+            [data-testid="collapsedControl"] {
+                position: fixed !important;
+                top: 0.55rem !important;
+                left: 0.55rem !important;
+                z-index: 1000000 !important;
+            }
+
+            [data-testid="stSidebarCollapseButton"] button,
+            [data-testid="collapsedControl"] button,
+            button[data-testid="baseButton-headerNoPadding"] {
+                background: #111b2e !important;
+                color: #ffffff !important;
+                border: 1px solid rgba(255,255,255,0.18) !important;
+                border-radius: 10px !important;
+                min-width: 2.65rem !important;
+                min-height: 2.65rem !important;
+            }
+
             .block-container {
-                padding-left: 1rem;
-                padding-right: 1rem;
+                max-width: 100%;
+                padding-top: 4.25rem;
+                padding-left: 0.85rem;
+                padding-right: 0.85rem;
+                padding-bottom: 3rem;
+                overflow-x: hidden;
             }
 
             .bms-hero,
             .bms-showcase-banner {
-                padding: 1.35rem;
+                padding: 1.2rem;
+                border-radius: 18px;
+            }
+
+            .bms-hero h1 {
+                font-size: 1.85rem;
+                line-height: 1.08;
+            }
+
+            .bms-hero p,
+            .bms-showcase-copy {
+                font-size: 0.95rem;
+                line-height: 1.55;
+            }
+
+            .bms-app-status {
+                align-items: flex-start;
+                padding: 0.8rem;
+            }
+
+            .bms-app-status-left,
+            .bms-app-status-right {
+                width: 100%;
+            }
+
+            [data-testid="stMetric"] {
+                padding: 0.85rem;
+            }
+
+            .stButton > button,
+            .stDownloadButton > button {
+                min-height: 3rem;
+                white-space: normal;
+            }
+
+            [data-testid="stDataFrame"],
+            [data-testid="stTable"] {
+                max-width: 100%;
+                overflow-x: auto;
+            }
+
+            img,
+            canvas,
+            svg {
+                max-width: 100%;
+                height: auto;
+            }
+        }
+
+        @media (max-width: 480px) {
+            [data-testid="stSidebar"] {
+                width: calc(100vw - 1.5rem) !important;
+                max-width: calc(100vw - 1.5rem) !important;
+            }
+
+            .block-container {
+                padding-left: 0.65rem;
+                padding-right: 0.65rem;
+            }
+
+            .bms-hero,
+            .bms-showcase-banner,
+            .bms-score-card,
+            .bms-summary-card,
+            .bms-observation {
+                border-radius: 16px;
+            }
+
+            .bms-score-ring {
+                width: 9.5rem;
+                height: 9.5rem;
+            }
+
+            .bms-score-ring:after {
+                width: 7.2rem;
+                height: 7.2rem;
+            }
+
+            .bms-score-value strong {
+                font-size: 2.35rem;
             }
         }
 
