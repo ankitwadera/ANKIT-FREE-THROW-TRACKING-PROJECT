@@ -790,9 +790,14 @@ def configure_page() -> None:
         }
         /* Publisher-ready interface polish */
         #MainMenu,
-        footer,
-        [data-testid="stToolbar"] {
+        footer {
             visibility: hidden;
+        }
+
+        /* Keep Streamlit's header controls available. The sidebar drawer
+           button lives in this area on mobile. */
+        [data-testid="stToolbar"] {
+            visibility: visible !important;
         }
 
         header[data-testid="stHeader"] {
@@ -826,7 +831,8 @@ def configure_page() -> None:
 
             [data-testid="stSidebarCollapseButton"],
             [data-testid="collapsedControl"],
-            button[data-testid="baseButton-headerNoPadding"] {
+            button[data-testid="baseButton-headerNoPadding"],
+            button[data-testid="stBaseButton-headerNoPadding"] {
                 display: none !important;
             }
         }
@@ -1167,24 +1173,44 @@ def configure_page() -> None:
                 box-shadow: 16px 0 38px rgba(17,27,46,0.28);
             }
 
+            /* Support both older and newer Streamlit sidebar-control IDs. */
             [data-testid="stSidebarCollapseButton"],
             [data-testid="collapsedControl"],
-            button[data-testid="baseButton-headerNoPadding"] {
+            [data-testid="stSidebarCollapsedControl"],
+            button[data-testid="baseButton-headerNoPadding"],
+            button[data-testid="stBaseButton-headerNoPadding"],
+            header[data-testid="stHeader"] button {
                 display: flex !important;
                 visibility: visible !important;
+                opacity: 1 !important;
                 pointer-events: auto !important;
             }
 
-            [data-testid="collapsedControl"] {
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"] {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
                 position: fixed !important;
                 top: 0.55rem !important;
                 left: 0.55rem !important;
                 z-index: 1000000 !important;
             }
 
+            [data-testid="stToolbar"],
+            [data-testid="stHeaderActionElements"] {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                pointer-events: auto !important;
+            }
+
             [data-testid="stSidebarCollapseButton"] button,
             [data-testid="collapsedControl"] button,
-            button[data-testid="baseButton-headerNoPadding"] {
+            [data-testid="stSidebarCollapsedControl"] button,
+            button[data-testid="baseButton-headerNoPadding"],
+            button[data-testid="stBaseButton-headerNoPadding"],
+            header[data-testid="stHeader"] button {
                 background: #111b2e !important;
                 color: #ffffff !important;
                 border: 1px solid rgba(255,255,255,0.18) !important;
